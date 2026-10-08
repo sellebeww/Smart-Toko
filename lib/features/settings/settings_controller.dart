@@ -9,8 +9,13 @@ import '../../core/db/dao/settings_dao.dart';
 class SettingsState {
   final bool backupEnabled;
   final bool llmEnabled;
+  final bool errorReportsEnabled;
 
-  const SettingsState({required this.backupEnabled, required this.llmEnabled});
+  const SettingsState({
+    required this.backupEnabled,
+    required this.llmEnabled,
+    required this.errorReportsEnabled,
+  });
 }
 
 class SettingsController extends AsyncNotifier<SettingsState> {
@@ -22,6 +27,7 @@ class SettingsController extends AsyncNotifier<SettingsState> {
     return SettingsState(
       backupEnabled: await settings.backupEnabled(),
       llmEnabled: await settings.llmEnabled(),
+      errorReportsEnabled: await settings.errorReportsEnabled(),
     );
   }
 
@@ -40,6 +46,12 @@ class SettingsController extends AsyncNotifier<SettingsState> {
     () => ref
         .read(settingsDaoProvider)
         .setFlag(SettingsKeys.llmEnabled, value: value),
+  );
+
+  Future<void> setErrorReportsEnabled({required bool value}) => _update(
+    () => ref
+        .read(settingsDaoProvider)
+        .setFlag(SettingsKeys.errorReportsEnabled, value: value),
   );
 }
 

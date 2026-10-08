@@ -25,4 +25,9 @@ class SupabaseConfig {
   /// mengirim transkrip ke mana pun. Nyalakan saat build dengan
   /// `--dart-define=AI_ASSIST=true`.
   static const bool aiAssist = bool.fromEnvironment('AI_ASSIST');
+
+  /// URL publik kebijakan privasi (wajib untuk Play Store). Isi saat build
+  /// dengan `--dart-define=PRIVACY_URL=https://...`; selama kosong, menu
+  /// "Kebijakan privasi" tidak ditampilkan.
+  static const String privacyUrl = String.fromEnvironment('PRIVACY_URL');
 }

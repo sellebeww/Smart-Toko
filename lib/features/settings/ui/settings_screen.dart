@@ -9,6 +9,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/providers.dart';
 import '../../../core/format.dart';
@@ -78,6 +79,21 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
             ],
+            const Divider(),
+            const _SectionHeader('Laporan error'),
+            SwitchListTile(
+              value: state.errorReportsEnabled,
+              onChanged: (value) => ref
+                  .read(settingsControllerProvider.notifier)
+                  .setErrorReportsEnabled(value: value),
+              title: const Text('Kirim laporan error'),
+              subtitle: const Text(
+                'Kalau dinyalakan, saat aplikasi mengalami error, jenis error, '
+                'versi aplikasi, dan jenis HP dikirim ke server SmartToko '
+                'supaya bisa diperbaiki. Data transaksi, nama, dan kontakmu '
+                'tidak ikut dikirim.',
+              ),
+            ),
             if (isAdmin) ...[
               const Divider(),
               const _SectionHeader('Admin'),
@@ -92,6 +108,15 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
             ],
+            if (SupabaseConfig.privacyUrl.isNotEmpty) ...[
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.privacy_tip_outlined),
+                title: const Text('Kebijakan privasi'),
+                trailing: const Icon(Icons.open_in_new),
+                onTap: () => _openPrivacyPolicy(context),
+              ),
+            ],
             const Divider(),
             const _SectionHeader('Zona berbahaya'),
             const _DeleteAccountTile(),
@@ -100,6 +125,18 @@ class SettingsScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _openPrivacyPolicy(BuildContext context) async {
+    final opened = await launchUrl(
+      Uri.parse(SupabaseConfig.privacyUrl),
+      mode: LaunchMode.externalApplication,
+    ).catchError((_) => false);
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tautan tidak bisa dibuka.')),
+      );
+    }
   }
 
   /// Menyalakan cadangan langsung membuat cadangan pertama, supaya

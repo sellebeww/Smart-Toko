@@ -12,6 +12,7 @@ import 'package:sqflite/sqflite.dart';
 class SettingsKeys {
   static const String backupEnabled = 'backup_enabled';
   static const String llmEnabled = 'llm_enabled';
+  static const String errorReportsEnabled = 'error_reports_enabled';
   static const String onboardingDone = 'onboarding_done';
   static const String activeStoreId = 'active_store_id';
 
@@ -60,4 +61,7 @@ class SettingsDao {
   Future<bool> backupEnabled() => getFlag(SettingsKeys.backupEnabled);
 
   Future<bool> llmEnabled() => getFlag(SettingsKeys.llmEnabled);
+
+  Future<bool> errorReportsEnabled() =>
+      getFlag(SettingsKeys.errorReportsEnabled);
 }

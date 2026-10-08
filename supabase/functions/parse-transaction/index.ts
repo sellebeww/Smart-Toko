@@ -114,6 +114,15 @@ Deno.serve(async (req) => {
   if (quotaError) return json(502, { error: "quota_check_failed" });
   if (allowed !== true) return json(429, { error: "daily_limit_reached" });
 
+  // Kegagalan di sisi server/model bukan salah pengguna: jatah dikembalikan.
+  const refund = async () => {
+    try {
+      await supabase.rpc("refund_llm_quota");
+    } catch (_) {
+      // Pengembalian jatah bersifat upaya terbaik.
+    }
+  };
+
   try {
     const response = await anthropic.beta.messages.create({
       model: MODEL,
@@ -138,17 +147,23 @@ Deno.serve(async (req) => {
 
     // Penolakan model tetap datang sebagai HTTP 200.
     if (response.stop_reason === "refusal") {
+      await refund();
       return json(422, { error: "refused" });
     }
     if (response.stop_reason === "max_tokens") {
+      await refund();
       return json(502, { error: "truncated" });
     }
 
     const text = response.content.find((block) => block.type === "text");
-    if (!text || text.type !== "text") return json(502, { error: "no_output" });
+    if (!text || text.type !== "text") {
+      await refund();
+      return json(502, { error: "no_output" });
+    }
 
     return json(200, { result: JSON.parse(text.text) });
   } catch (error) {
+    await refund();
     if (error instanceof Anthropic.RateLimitError) {
       return json(503, { error: "upstream_busy" });
     }

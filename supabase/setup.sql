@@ -472,6 +472,92 @@ $$;
 revoke all on function public.consume_llm_quota(int) from public, anon;
 grant execute on function public.consume_llm_quota(int) to authenticated;
 
+-- Mengembalikan satu jatah bila panggilan ke model gagal di sisi server
+-- (bukan salah pengguna), supaya kegagalan tidak menghabiskan kuota harian.
+create or replace function public.refund_llm_quota()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null then
+    return;
+  end if;
+
+  update public.llm_usage
+  set calls = greatest(calls - 1, 0)
+  where user_id = auth.uid()
+    and day = (now() at time zone 'Asia/Jakarta')::date;
+end;
+$$;
+
+revoke all on function public.refund_llm_quota() from public, anon;
+grant execute on function public.refund_llm_quota() to authenticated;
+
+-- =============================================================
+-- 7b. Laporan error dari aplikasi
+-- =============================================================
+-- Pengganti layanan crash reporting pihak ketiga: aplikasi melaporkan error
+-- tak tertangani lewat fungsi di bawah. Isinya hanya jenis error, pesan dan
+-- stack yang dipotong, versi aplikasi, dan platform — tanpa data transaksi.
+-- Tabel tidak bisa dibaca klien; baca lewat SQL Editor / dashboard.
+create table if not exists public.client_errors (
+  id bigint generated always as identity primary key,
+  user_id uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  app_version text,
+  platform text,
+  error_type text,
+  message text,
+  stack text
+);
+
+alter table public.client_errors enable row level security;
+revoke all on public.client_errors from anon, authenticated;
+
+create or replace function public.report_client_error(
+  p_app_version text,
+  p_platform text,
+  p_error_type text,
+  p_message text,
+  p_stack text
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null then
+    return;
+  end if;
+
+  -- Batas harian per pengguna agar tidak bisa dipakai membanjiri tabel.
+  if (
+    select count(*) from public.client_errors
+    where user_id = auth.uid() and created_at > now() - interval '1 day'
+  ) >= 50 then
+    return;
+  end if;
+
+  insert into public.client_errors
+    (user_id, app_version, platform, error_type, message, stack)
+  values (
+    auth.uid(),
+    left(p_app_version, 32),
+    left(p_platform, 32),
+    left(p_error_type, 200),
+    left(p_message, 1000),
+    left(p_stack, 4000)
+  );
+end;
+$$;
+
+revoke all on function public.report_client_error(text, text, text, text, text)
+  from public, anon;
+grant execute on function public.report_client_error(text, text, text, text, text)
+  to authenticated;
+
 -- =============================================================
 -- 8. Hapus akun
 -- =============================================================

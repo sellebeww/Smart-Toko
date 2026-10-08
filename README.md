@@ -106,6 +106,31 @@ supabase functions deploy parse-transaction
 Kunci Anthropic hanya disimpan di server. Pengguna cukup menyalakan sakelar
 "Bantuan AI" di Pengaturan.
 
+### 5. Uji otomatis SQL (opsional, butuh Docker)
+
+```sh
+supabase/tests/run.sh
+```
+
+Menjalankan `setup.sql` dua kali di Postgres sungguhan lalu menguji kebijakan
+keamanannya: pemilik tidak bisa menandai tokonya `verified`, tidak bisa
+menulis ke folder orang lain, hanya admin yang bisa meninjau, kuota AI,
+batas laporan error, dan hapus akun. Skema Supabase ditiru oleh
+`supabase/tests/00_shim.sql`, jadi ini menguji logika `setup.sql`, bukan
+project Supabase-mu. Uji manual nomor 6 di bawah tetap perlu dijalankan
+sekali pada project sungguhan.
+
+### 6. Laporan error
+
+Pengguna yang menyalakan "Kirim laporan error" di Pengaturan mengirim
+laporan ke tabel `public.client_errors`. Tabel itu tertutup untuk klien;
+bacalah lewat SQL Editor:
+
+```sql
+select created_at, app_version, platform, error_type, message
+from public.client_errors order by created_at desc limit 50;
+```
+
 ## Build rilis Android
 
 1. Buat keystore upload sekali saja, lalu **simpan cadangannya di tempat
@@ -135,10 +160,15 @@ rilis pertama.
 
 ### Kebutuhan Play Store yang harus disiapkan di luar kode
 
-- **Kebijakan privasi** berupa URL publik. Sebutkan: data akun dan profil
+- **Kebijakan privasi** berupa URL publik. Draf awal ada di
+  [docs/PRIVACY_POLICY.md](docs/PRIVACY_POLICY.md) (bagian `[ISI]` harus
+  dilengkapi dan ditinjau). Setelah dipublikasikan, pasang URL-nya saat
+  build dengan `--dart-define=PRIVACY_URL=https://...` supaya menu
+  "Kebijakan privasi" muncul di Pengaturan. Pastikan memuat: data akun dan profil
   toko di server; foto KTP/selfie hanya untuk verifikasi dan hanya dibuka
   admin; cadangan bersifat opsional; transkrip ucapan dikirim ke Anthropic
-  hanya bila Bantuan AI dinyalakan.
+  hanya bila Bantuan AI dinyalakan; laporan error hanya bila dinyalakan;
+  pengenal ucapan Android dapat memproses suara di server Google.
 - **Data safety form** dengan isi yang sama.
 - Penghapusan akun sudah ada di aplikasi (Pengaturan > Hapus akun).
 

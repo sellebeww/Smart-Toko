@@ -49,6 +49,11 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- Membuka tautan kebijakan privasi di peramban. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
         <!-- Wajib sejak Android 11 agar layanan pengenal ucapan terlihat. -->
         <intent>
             <action android:name="android.speech.RecognitionService"/>

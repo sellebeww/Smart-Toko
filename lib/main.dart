@@ -7,6 +7,7 @@ import 'app/app.dart';
 import 'app/providers.dart';
 import 'core/db/app_database.dart';
 import 'core/db/dao/settings_dao.dart';
+import 'core/error_reporter.dart';
 import 'core/supabase_config.dart';
 
 Future<void> main() async {
@@ -20,8 +21,13 @@ Future<void> main() async {
   final database = AppDatabase();
   await database.open();
 
-  final onboardingDone = await SettingsDao(database.db)
-      .getFlag(SettingsKeys.onboardingDone);
+  final settings = SettingsDao(database.db);
+  (await ErrorReporter.forSupabase(
+    Supabase.instance.client,
+    isEnabled: settings.errorReportsEnabled,
+  )).install();
+
+  final onboardingDone = await settings.getFlag(SettingsKeys.onboardingDone);
 
   runApp(
     ProviderScope(
