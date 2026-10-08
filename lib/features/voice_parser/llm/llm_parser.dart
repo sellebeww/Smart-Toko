@@ -3,7 +3,7 @@
 /// PERHATIAN PRIVASI: implementasi mana pun dari [LlmParser] mengirim transkrip
 /// ucapan pengguna KELUAR dari perangkat. Karena itu pemanggilnya wajib
 /// memastikan pengguna sudah mengaktifkannya lewat sakelar tersendiri — bukan
-/// dibonceng ke sakelar sinkronisasi — dan fitur ini default MATI.
+/// dibonceng ke sakelar cadangan — dan fitur ini default MATI.
 library;
 
 import '../domain/parse_result.dart';

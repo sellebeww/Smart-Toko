@@ -1,5 +1,5 @@
 name: smart_toko
-description: "A new Flutter project."
+description: "SmartToko — pencatatan keuangan warung lewat suara, offline-first."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -39,8 +39,6 @@ dependencies:
   path: ^1.9.1
   speech_to_text: ^7.5.0
   connectivity_plus: ^7.3.1
-  flutter_secure_storage: ^11.2.0
-  http: ^1.6.0
   uuid: ^4.6.0
   intl: ^0.20.3
   image_picker: ^1.2.3
@@ -48,6 +46,7 @@ dependencies:
   excel: ^4.0.6
   share_plus: ^13.3.0
   path_provider: ^2.1.6
+  flutter_svg: ^2.3.0
 
 dev_dependencies:
   flutter_test:
@@ -71,6 +70,13 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+  assets:
+    - assets/brand/smarttoko-logo.png
+    - assets/figma/
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

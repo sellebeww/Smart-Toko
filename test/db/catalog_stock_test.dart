@@ -290,11 +290,18 @@ void main() {
         columns: ['id', 'category', 'recorded_by'],
         orderBy: 'id',
       );
+      final store = await upgraded.db.query('stores');
+      final tables = await upgraded.db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type = 'table'",
+      );
       await upgraded.close();
       await deleteDatabase(path);
 
       // Naik langsung dari v1 ke versi terbaru melewati semua migrasi.
-      expect(schemaVersion, 3);
+      expect(schemaVersion, 4);
+      expect(store.single['owner_uid'], isNull);
+      expect(store.single.containsKey('address'), isTrue);
+      expect(tables.map((t) => t['name']), isNot(contains('pending_sync')));
       expect(rows[0]['category'], 'penjualan');
       expect(rows[1]['category'], 'pengeluaran');
       expect(rows[0]['recorded_by'], isNull);

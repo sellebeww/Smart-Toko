@@ -10,7 +10,7 @@ import 'upload_screen.dart';
 
 /// Naikkan setiap kali isi teks persetujuan di bawah berubah, supaya catatan
 /// persetujuan di data toko tetap menunjuk ke teks yang benar-benar dibaca.
-const String identityConsentVersion = 'ktp-v3';
+const String identityConsentVersion = 'ktp-v4';
 
 class ConsentScreen extends StatefulWidget {
   final String storeId;
@@ -79,12 +79,14 @@ class _ConsentScreenState extends State<ConsentScreen> {
                     const SizedBox(height: 8),
                     const Text(
                       'Foto-foto ini HANYA dipakai untuk memverifikasi kepemilikan '
-                      'toko. Disimpan terenkripsi di server, dan aturan '
-                      'akses aplikasi hanya mengizinkan akunmu sendiri membukanya. '
-                      'Tidak ditampilkan di layar mana pun di aplikasi ini setelah '
-                      'diunggah, dan tidak ikut dalam data yang diekspor. Salinan '
-                      'sementara yang dibuat aplikasi dihapus setelah selesai atau '
-                      'dibatalkan; foto asli di galeri tetap ada.\n\n'
+                      'toko. Disimpan terenkripsi di server SmartToko dan hanya '
+                      'bisa dibuka oleh akunmu serta petugas peninjau verifikasi '
+                      'SmartToko. Tidak dibagikan ke pihak lain, tidak ditampilkan '
+                      'lagi di aplikasimu setelah diunggah, dan tidak ikut dalam '
+                      'data yang diekspor. Salinan sementara yang dibuat aplikasi '
+                      'dihapus setelah selesai atau dibatalkan; foto asli di galeri '
+                      'tetap ada. Semua foto ikut terhapus bila kamu menghapus '
+                      'akun.\n\n'
                       'Verifikasi sepenuhnya opsional — toko tetap bisa dipakai '
                       'penuh tanpa ini.',
                     ),

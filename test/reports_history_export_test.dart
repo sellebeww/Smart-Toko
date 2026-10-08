@@ -8,8 +8,6 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:smart_toko/core/db/app_database.dart';
-import 'package:smart_toko/core/db/dao/pending_sync_dao.dart';
-import 'package:smart_toko/core/db/dao/settings_dao.dart';
 import 'package:smart_toko/core/db/dao/store_dao.dart';
 import 'package:smart_toko/core/transaction_kind.dart';
 import 'package:smart_toko/features/export/excel_exporter.dart';
@@ -211,18 +209,6 @@ void main() {
       expect(await repository.findById(original.id), isNull);
       expect(replaced.totalAmount, 30000);
       expect(replaced.occurredAt, original.occurredAt);
-    });
-
-    test('lencana sinkron hanya untuk transaksi yang masih antre', () async {
-      await SettingsDao(database.db)
-          .setFlag(SettingsKeys.syncEnabled, value: true);
-      final saved = await repository.save(
-        tx(TxCategory.penjualan, DateTime(2026, 9, 29, 9)),
-        storeId: storeId,
-      );
-      final ids = await PendingSyncDao(database.db)
-          .pendingEntityIds('transaction');
-      expect(ids, {saved.id});
     });
 
     test('laporan: total per kategori, menu terlaris, pengeluaran', () async {

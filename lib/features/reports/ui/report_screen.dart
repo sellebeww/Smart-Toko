@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/providers.dart';
 import '../../../core/db/dao/product_dao.dart';
 import '../../../core/format.dart';
+import '../../../core/ui/figma_icon.dart';
 import '../../../core/transaction_kind.dart';
 import '../../catalog/ui/catalog_screen.dart';
 import '../../export/export_service.dart';
@@ -25,22 +26,38 @@ class ReportScreen extends ConsumerStatefulWidget {
 class _ReportScreenState extends ConsumerState<ReportScreen> {
   ReportPeriod _period = ReportPeriod.hariIni;
 
+  bool _exporting = false;
+
   Future<void> _export(ReportData data) async {
-    final records = await ref
-        .read(transactionRepositoryProvider)
-        .listBetween(
-          storeId: ref.read(activeStoreIdProvider)!,
-          from: data.from,
-          to: data.to,
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    try {
+      final records = await ref
+          .read(transactionRepositoryProvider)
+          .listBetween(
+            storeId: ref.read(activeStoreIdProvider)!,
+            from: data.from,
+            to: data.to,
+          );
+      if (!mounted) return;
+      await exportTransactions(
+        context,
+        ref,
+        records: records,
+        from: data.from,
+        toInclusive: data.to.subtract(const Duration(days: 1)),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Laporan belum bisa diekspor. Coba lagi.'),
+          ),
         );
-    if (!mounted) return;
-    await exportTransactions(
-      context,
-      ref,
-      records: records,
-      from: data.from,
-      toInclusive: data.to.subtract(const Duration(days: 1)),
-    );
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
   }
 
   @override
@@ -48,7 +65,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
     final report = ref.watch(reportProvider(_period));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Laporan')),
+      appBar: AppBar(title: const Text('Laporan & Insight')),
       body: Column(
         children: [
           Padding(
@@ -67,8 +84,10 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
             child: report.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('Gagal memuat: $e')),
-              data: (data) =>
-                  _ReportBody(data: data, onExport: () => _export(data)),
+              data: (data) => _ReportBody(
+                data: data,
+                onExport: _exporting ? null : () => _export(data),
+              ),
             ),
           ),
         ],
@@ -79,7 +98,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
 
 class _ReportBody extends StatelessWidget {
   final ReportData data;
-  final VoidCallback onExport;
+  final VoidCallback? onExport;
 
   const _ReportBody({required this.data, required this.onExport});
 
@@ -91,54 +110,85 @@ class _ReportBody extends StatelessWidget {
     final vs = data.period.previousLabel;
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       children: [
+        Container(
+          padding: const EdgeInsets.all(20),
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE8F2E9),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'RINGKASAN ${data.period.label.toUpperCase()}',
+                style: const TextStyle(
+                  color: Color(0xFF176448),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'Omzet ${data.period.label.toLowerCase()}',
+                style: theme.textTheme.bodySmall,
+              ),
+              const SizedBox(height: 4),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  formatRupiah(c.omzet),
+                  style: theme.textTheme.headlineLarge,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 14),
+              Text(
+                '${c.count} transaksi tercatat',
+                style: theme.textTheme.labelLarge,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '${formatShortDate(data.from)} – ${formatShortDate(data.to.subtract(const Duration(days: 1)))}',
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: _MetricCard(
-                label: 'Omzet',
-                amount: c.omzet,
-                previous: p.omzet,
+                label: 'Total biaya',
+                amount: c.pengeluaran,
+                previous: p.pengeluaran,
+                vs: vs,
+                color: theme.colorScheme.onSurface,
+                higherIsBetter: false,
+              ),
+            ),
+            Expanded(
+              child: _MetricCard(
+                label: 'Estimasi laba',
+                amount: c.omzet - c.pengeluaran,
+                previous: p.omzet - p.pengeluaran,
                 vs: vs,
                 color: theme.colorScheme.primary,
               ),
             ),
-            Expanded(
-              child: _MetricCard(
-                label: 'Pengeluaran',
-                amount: c.pengeluaran,
-                previous: p.pengeluaran,
-                vs: vs,
-                color: theme.colorScheme.error,
-                higherIsBetter: false,
-              ),
-            ),
           ],
         ),
-        Row(
-          children: [
-            Expanded(
-              child: _MetricCard(
-                label: 'Keuntungan (perkiraan)',
-                amount: c.keuntungan,
-                previous: p.keuntungan,
-                vs: vs,
-                color: c.keuntungan >= 0
-                    ? Colors.green.shade700
-                    : theme.colorScheme.error,
-              ),
-            ),
-            Expanded(
-              child: _MetricCard(
-                label: 'Transaksi',
-                count: c.count,
-                previous: p.count,
-                vs: vs,
-                color: theme.colorScheme.onSurface,
-              ),
-            ),
-          ],
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+          child: Text(
+            'Estimasi laba = omzet − biaya tercatat. Pembelian stok belum tentu habis terpakai pada periode ini.',
+            style: theme.textTheme.bodySmall,
+          ),
         ),
         if (c.of(TxCategory.pemasukanLain) > 0)
           Padding(
@@ -243,10 +293,14 @@ class _ReportBody extends StatelessWidget {
                 ),
         ),
         const SizedBox(height: 8),
-        OutlinedButton.icon(
+        FilledButton.icon(
           onPressed: onExport,
-          icon: const Icon(Icons.file_download_outlined),
-          label: Text('Export Excel (${data.period.label.toLowerCase()})'),
+          icon: const FigmaIcon('8b6fb'),
+          label: Text(
+            onExport == null
+                ? 'Menyiapkan laporan…'
+                : 'Ekspor Excel (${data.period.label.toLowerCase()})',
+          ),
         ),
       ],
     );
@@ -256,7 +310,6 @@ class _ReportBody extends StatelessWidget {
 class _MetricCard extends StatelessWidget {
   final String label;
   final int? amount;
-  final int? count;
   final int previous;
   final String vs;
   final Color color;
@@ -268,14 +321,13 @@ class _MetricCard extends StatelessWidget {
     required this.vs,
     required this.color,
     this.amount,
-    this.count,
     this.higherIsBetter = true,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final value = amount ?? count ?? 0;
+    final value = amount ?? 0;
     final pct = percentChange(value, previous);
     final good = pct == null || pct == 0 || (pct > 0) == higherIsBetter;
 
@@ -291,7 +343,7 @@ class _MetricCard extends StatelessWidget {
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
               child: Text(
-                amount != null ? formatRupiah(value) : formatNumber(value),
+                formatRupiah(value),
                 style: theme.textTheme.titleLarge?.copyWith(
                   color: color,
                   fontWeight: FontWeight.bold,

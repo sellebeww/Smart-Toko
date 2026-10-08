@@ -253,11 +253,15 @@ class _ConfirmationSheetState extends State<ConfirmationSheet> {
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
                     children: [
                       if (_draft.transcript != null) ...[
-                        _TranscriptChip(transcript: _draft.transcript!),
+                        _TranscriptChip(
+                          transcript: _draft.transcript!,
+                          fromVoice: fromVoice,
+                        ),
                         const SizedBox(height: 16),
                       ],
-                      if (_draft.needsAttention && fromVoice) ...[
-                        const _AttentionBanner(),
+                      if (_draft.needsAttention &&
+                          _draft.transcript != null) ...[
+                        _AttentionBanner(fromVoice: fromVoice),
                         const SizedBox(height: 16),
                       ],
                       _DirectionSelector(
@@ -510,7 +514,8 @@ class _ContactRow extends StatelessWidget {
 class _TranscriptChip extends StatelessWidget {
   final String transcript;
 
-  const _TranscriptChip({required this.transcript});
+  final bool fromVoice;
+  const _TranscriptChip({required this.transcript, required this.fromVoice});
 
   @override
   Widget build(BuildContext context) {
@@ -526,7 +531,7 @@ class _TranscriptChip extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
-            Icons.hearing,
+            fromVoice ? Icons.hearing : Icons.edit_outlined,
             size: 18,
             color: theme.colorScheme.onSurfaceVariant,
           ),
@@ -547,7 +552,8 @@ class _TranscriptChip extends StatelessWidget {
 }
 
 class _AttentionBanner extends StatelessWidget {
-  const _AttentionBanner();
+  final bool fromVoice;
+  const _AttentionBanner({required this.fromVoice});
 
   @override
   Widget build(BuildContext context) {
@@ -568,7 +574,9 @@ class _AttentionBanner extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Ada yang kurang jelas terdengar. Bagian bertanda perlu dicek.',
+              fromVoice
+                  ? 'Ada yang kurang jelas terdengar. Bagian bertanda perlu dicek.'
+                  : 'Ada bagian teks yang perlu diperiksa. Cek bagian bertanda sebelum menyimpan.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onTertiaryContainer,
               ),
@@ -868,13 +876,18 @@ class _ConfidenceField extends StatelessWidget {
       ConfidenceBand.good => (null, null, null),
       ConfidenceBand.check => (
         scheme.tertiary,
-        field.rawSpan == null ? 'Cek lagi' : 'Terdengar: "${field.rawSpan}"',
+        field.rawSpan == null
+            ? 'Cek lagi'
+            : fromVoice
+            ? 'Terdengar: "${field.rawSpan}"'
+            : 'Dari teks: "${field.rawSpan}"',
         Icons.help_outline,
       ),
       ConfidenceBand.poor => (
         scheme.error,
         switch ((fromVoice, field.rawSpan)) {
-          (_, final String span) => 'Kurang jelas, terdengar: "$span"',
+          (true, final String span) => 'Kurang jelas, terdengar: "$span"',
+          (false, final String span) => 'Periksa teks: "$span"',
           (true, _) => 'Tidak terdengar jelas — isi sendiri',
           (false, _) => 'Belum diisi',
         },

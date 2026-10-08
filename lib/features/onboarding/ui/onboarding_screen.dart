@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
+import '../../../core/ui/brand.dart';
 import '../../../core/db/dao/settings_dao.dart';
 
 class OnboardingScreen extends ConsumerWidget {
@@ -23,16 +24,16 @@ class OnboardingScreen extends ConsumerWidget {
 
     return Scaffold(
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 24),
-              Text('SmartToko', style: theme.textTheme.displaySmall),
+              const BrandHeader(),
               const SizedBox(height: 8),
               Text(
-                'Catat jualan tanpa pegang HP',
+                'Lebih sedikit mengetik. Lebih fokus jualan.',
                 style: theme.textTheme.titleMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -64,7 +65,7 @@ class OnboardingScreen extends ConsumerWidget {
                     'catatan ke cloud, kamu sendiri yang menyalakannya di '
                     'Pengaturan.',
               ),
-              const Spacer(),
+              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
                 height: 56,
@@ -73,7 +74,7 @@ class OnboardingScreen extends ConsumerWidget {
                     await ref
                         .read(settingsDaoProvider)
                         .setFlag(SettingsKeys.onboardingDone, value: true);
-                    onDone();
+                    if (context.mounted) onDone();
                   },
                   child: const Text('Mulai', style: TextStyle(fontSize: 18)),
                 ),

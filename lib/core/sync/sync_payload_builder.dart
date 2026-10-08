@@ -8,7 +8,7 @@ library;
 
 import '../../features/transactions/domain/transaction_record.dart';
 
-/// Field yang tidak pernah ikut tersinkronisasi tanpa persetujuan identitas
+/// Field yang tidak pernah ikut keluar perangkat (sinkron maupun cadangan) tanpa persetujuan identitas
 /// yang terpisah dan eksplisit.
 const Set<String> identityFieldNames = {
   'ktp_number',
@@ -28,7 +28,7 @@ class SyncPayloadBuilder {
   const SyncPayloadBuilder();
 
   /// [identityConsent] hanya boleh true bila pengguna menyetujui layar
-  /// persetujuan data identitas — bukan sekadar menyalakan sinkronisasi.
+  /// persetujuan data identitas — bukan sekadar menyalakan cadangan.
   Map<String, Object?> build(
     Map<String, Object?> raw, {
     required bool identityConsent,

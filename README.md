@@ -1,73 +1,174 @@
 # SmartToko
 
-Aplikasi Flutter untuk mencatat pemasukan dan pengeluaran toko lewat suara atau
-ketikan. Setiap draf diperiksa pengguna sebelum disimpan ke SQLite di perangkat.
-Akun dan profil multi-toko disimpan di Firebase; verifikasi toko bersifat opsional.
+Aplikasi Android/iOS untuk mencatat pemasukan dan pengeluaran warung lewat
+suara atau ketikan. Setiap catatan diperiksa pengguna sebelum disimpan, dan
+semua catatan tersimpan di HP (tetap jalan tanpa internet).
 
-## Menjalankan
+Backend: **Supabase** (Auth, Postgres, Storage, Edge Functions).
+Alasan di balik rancangannya ada di [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md).
+Review UI Figma, perbaikan terbaru, dan batas pengujiannya ada di
+[docs/UI_REVIEW.md](docs/UI_REVIEW.md).
 
-Gunakan Flutter yang menyertakan Dart sesuai `pubspec.yaml` (`^3.13.4`).
-Konfigurasi Firebase aplikasi berada di `lib/firebase_options.dart` dan konfigurasi
-platform Android. Aktifkan penyedia Email/Password di Firebase Authentication,
-serta Firestore dan Storage pada proyek yang digunakan.
+## Fitur
+
+- Daftar/masuk dengan email + kata sandi, konfirmasi email dan reset kata
+  sandi dengan **kode OTP** dari email.
+- Banyak toko per akun; profil toko bisa diubah.
+- Catat transaksi lewat suara atau ketik manual. Draf selalu diperiksa dulu.
+- Katalog menu/bahan dan stok yang tumbuh otomatis dari transaksi; kontak
+  pelanggan/supplier.
+- Riwayat, laporan, dan export Excel.
+- Bantuan AI (opsional) untuk ucapan yang sulit diurai, lewat server.
+- Cadangan cloud (opsional) per toko, dengan pemulihan di HP baru.
+- Verifikasi toko (opsional): KTP, foto toko, selfie, NIB, lalu ditinjau
+  admin.
+- Hapus akun beserta seluruh data dari dalam aplikasi.
+
+## Menjalankan untuk pengembangan
+
+Butuh Flutter dengan Dart sesuai `pubspec.yaml` (`^3.13.4`).
 
 ```sh
 flutter pub get
 flutter analyze
 flutter test
-flutter run -d emulator-5554
+flutter run
 ```
 
-Pilih ID perangkat dari `flutter devices` bila berbeda. Android adalah platform
-yang diuji untuk build aplikasi ini. Pengaturan izin kamera, galeri, mikrofon, dan
-pengenalan ucapan iOS sudah disertakan; build dan integrasi Firebase iOS tetap
-perlu divalidasi pada perangkat Apple yang dikonfigurasi.
+Aplikasi memakai project Supabase di
+[lib/core/supabase_config.dart](lib/core/supabase_config.dart). Untuk project
+lain, timpa saat build dengan `--dart-define=SUPABASE_URL=...` dan
+`--dart-define=SUPABASE_PUBLISHABLE_KEY=...`.
 
-## Alur yang tersedia
+## Menyiapkan Supabase (sekali per project)
 
-- Registrasi dan masuk dengan email/kata sandi; tautan lupa kata sandi via email.
-- Tambah dan pilih toko; pilihan terakhir diingat terpisah untuk setiap akun.
-- Rekam transaksi atau ketik manual, periksa rincian, lalu simpan.
-- Ringkasan pemasukan/pengeluaran dan transaksi hari ini dari penyimpanan lokal.
-- Persetujuan verifikasi, foto KTP/toko/selfie, dan NIB opsional; progres unggah,
-  pembatasan ukuran foto, serta penghapusan salinan sementara saat selesai/batal.
-- Panel simulasi admin untuk perubahan status pengajuan.
+### 1. Database, Storage, dan keamanan
 
-Login menggunakan nomor HP dan kata sandi belum tersedia. Autentikasi yang
-terpasang saat ini menggunakan email dan kata sandi.
+Buka **SQL Editor**, tempel seluruh isi
+[supabase/setup.sql](supabase/setup.sql), lalu jalankan. Skrip ini aman
+dijalankan ulang dan sekaligus memperbarui project yang memakai skrip versi
+lama (policy "semua orang boleh baca semua toko" dan fungsi admin tanpa
+pemeriksaan role ikut dibuang).
 
-## Pengujian manual
+### 2. Authentication
 
-1. Masuk, tambah toko, ganti toko, tutup/buka aplikasi, dan pastikan toko terakhir
-   dipulihkan. Keluar lalu masuk akun lain; toko aktif tidak boleh terbawa.
-2. Buka lupa kata sandi; coba email tidak valid, koneksi gagal, dan email akun uji.
-   Pengiriman email sungguhan membutuhkan Firebase yang dapat dijangkau.
-3. Rekam lalu segera berhenti; coba rekaman kosong, ketik saat sedang merekam,
-   serta hasil suara final. Satu sesi hanya boleh membuka satu draf konfirmasi.
-4. Di draf, jumlah nol harus ditolak. Kegagalan simpan harus mempertahankan isian
-   untuk dicoba lagi. Pastikan transaksi masuk ke toko yang dipilih.
-5. Buka persetujuan verifikasi di layar kecil/huruf besar. Semua teks, kotak
-   persetujuan, dan tombol lanjut harus dapat dijangkau dengan menggulir.
-6. Dengan data uji, coba menolak izin kamera, memilih/mengganti foto, membatalkan,
-   memutus koneksi, dan mengirim pengajuan. Periksa status di Pengaturan.
+Di **Authentication > Providers > Email**:
 
-Tes otomatis memakai pengganti layanan untuk alur suara dan reset kata sandi;
-kelulusannya bukan bukti pengiriman email atau unggah foto ke Firebase sungguhan.
+- Email provider: aktif.
+- Confirm email: aktif (disarankan).
+- Minimum password length: 8.
 
-## Batasan layanan dan data
+Di **Authentication > Email Templates**, aplikasi memakai **kode**, bukan
+tautan. Pastikan kedua template ini memuat `{{ .Token }}`:
 
-`firestore.rules` dan panel admin saat ini sengaja mengikuti simulasi demo:
-semua akun yang login dapat membaca profil toko dan mengubah status verifikasi.
-Ini **belum merupakan otorisasi admin untuk produksi**. Sebelum rilis publik,
-pasang role admin yang diverifikasi server dan batasi perubahan field/status
-pada rules. Storage membatasi berkas verifikasi ke UID pemilik, gambar, dan
-ukuran di bawah 10 MB. Perubahan file rules lokal tidak otomatis terbit ke Firebase.
+- **Confirm signup**, misalnya:
+  `Kode konfirmasi SmartToko kamu: {{ .Token }}`
+- **Reset Password**, misalnya:
+  `Kode untuk membuat kata sandi baru: {{ .Token }}. Abaikan email ini bila kamu tidak memintanya.`
 
-Transaksi lokal tidak otomatis tersedia di perangkat lain. Infrastruktur antrean
-sinkronisasi tersedia, tetapi target server transaksi masih perlu diimplementasikan.
-Foto verifikasi tersimpan di Firebase Storage; foto asli di galeri tidak dihapus.
-Jika pengajuan berhenti di tengah, sebagian unggahan mungkin sudah ada di server.
-Panel demo tidak menampilkan kembali dokumen identitas.
+Untuk produksi, pasang **SMTP sendiri** (Authentication > SMTP Settings).
+SMTP bawaan Supabase hanya boleh mengirim beberapa email per jam dan tidak
+ditujukan untuk pengguna sungguhan.
 
-Keputusan arsitektur awal ada di `DESIGN_DECISIONS.md`; bagian status implementasi
-Firebase/verifikasi di dokumen tersebut mendahului fitur akun dan unggah saat ini.
+### 3. Admin peninjau verifikasi
+
+Daftarkan akun admin lewat aplikasi seperti biasa, lalu jalankan di SQL
+Editor (ganti emailnya):
+
+```sql
+insert into public.admins (user_id)
+select id from auth.users where email = 'admin@contoh.com'
+on conflict do nothing;
+```
+
+Menu **Admin > Tinjau pengajuan verifikasi** baru muncul di Pengaturan untuk
+akun itu. Akun lain tidak bisa membaca pengajuan maupun memberi keputusan,
+walaupun memanggil API-nya langsung.
+
+### 4. Bantuan AI (Edge Function, opsional)
+
+Fitur ini **mati secara bawaan** dan menunya tidak tampil. Nyalakan hanya
+setelah fungsi di-deploy, dengan menambah `--dart-define=AI_ASSIST=true`
+saat build.
+
+Butuh [Supabase CLI](https://supabase.com/docs/guides/cli) dan kunci API
+Anthropic.
+
+```sh
+supabase login
+supabase link --project-ref <project-ref>
+supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
+# opsional, bawaan 200 panggilan per akun per hari:
+supabase secrets set LLM_DAILY_LIMIT=200
+supabase functions deploy parse-transaction
+```
+
+Kunci Anthropic hanya disimpan di server. Pengguna cukup menyalakan sakelar
+"Bantuan AI" di Pengaturan.
+
+## Build rilis Android
+
+1. Buat keystore upload sekali saja, lalu **simpan cadangannya di tempat
+   aman**. Tanpa keystore ini, aplikasi tidak bisa diperbarui di Play Store.
+
+   ```sh
+   keytool -genkey -v -keystore ~/smarttoko-upload.jks -keyalg RSA \
+     -keysize 2048 -validity 10000 -alias upload
+   ```
+
+2. Salin [android/key.properties.example](android/key.properties.example)
+   menjadi `android/key.properties` lalu isi. Berkas ini sudah diabaikan git.
+3. Naikkan `version` di `pubspec.yaml` (mis. `1.0.1+2`) setiap rilis.
+4. Build:
+
+   ```sh
+   flutter build appbundle --release
+   ```
+
+   Hasilnya `build/app/outputs/bundle/release/app-release.aab`.
+
+Tanpa `android/key.properties`, build release ditandatangani kunci debug.
+Itu hanya untuk mencoba di HP sendiri dan tidak bisa diunggah ke Play Store.
+
+ID aplikasi: `com.smarttoko.app` (Android dan iOS). Jangan diganti setelah
+rilis pertama.
+
+### Kebutuhan Play Store yang harus disiapkan di luar kode
+
+- **Kebijakan privasi** berupa URL publik. Sebutkan: data akun dan profil
+  toko di server; foto KTP/selfie hanya untuk verifikasi dan hanya dibuka
+  admin; cadangan bersifat opsional; transkrip ucapan dikirim ke Anthropic
+  hanya bila Bantuan AI dinyalakan.
+- **Data safety form** dengan isi yang sama.
+- Penghapusan akun sudah ada di aplikasi (Pengaturan > Hapus akun).
+
+## Uji manual sebelum rilis
+
+Butuh project Supabase yang sudah disiapkan seperti di atas.
+
+1. **Akun:** daftar, masukkan kode konfirmasi, keluar, lalu masuk lagi. Coba
+   "Lupa kata sandi": kode salah ditolak, kode benar mengganti kata sandi dan
+   langsung masuk.
+2. **Luring:** setelah sekali masuk, matikan internet dan tutup-buka
+   aplikasi. Toko harus tetap terbuka dan transaksi tetap bisa dicatat.
+3. **Toko:** tambah toko kedua, ganti toko, lalu ubah profil toko.
+   Transaksi masuk ke toko yang sedang dipilih.
+4. **Cadangan:** nyalakan cadangan, catat transaksi, lalu tunggu cadangan
+   terakhir berubah. Pasang ulang aplikasi (atau pakai HP lain), masuk, dan
+   pilih "Pulihkan" di layar utama. Transaksi, stok, dan kontak harus kembali.
+5. **Verifikasi:** ajukan verifikasi dengan tiga foto wajib. Dari akun admin,
+   foto harus tampil di panel admin, lalu setujui atau tolak. Status di HP
+   pemilik harus ikut berubah.
+6. **Keamanan:** dari akun bukan admin, panggil fungsi admin lewat API
+   (mis. `rpc('review_store_verification', ...)`) dan coba update
+   `verification_status` langsung. Keduanya harus ditolak.
+7. **Bantuan AI:** nyalakan, lalu ucapkan kalimat yang tidak dikenali
+   pengurai lokal. Draf tetap harus diperiksa sebelum disimpan.
+8. **Hapus akun:** akun, toko, foto, dan cadangan hilang dari Supabase, lalu
+   aplikasi kembali ke layar masuk.
+
+## Batasan yang diketahui
+
+- Login dengan nomor HP belum ada (butuh penyedia SMS berbayar).
+- Pencatatan otomatis dari notifikasi QRIS belum ada.
+- iOS belum diuji di perangkat nyata.

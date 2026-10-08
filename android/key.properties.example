@@ -1,0 +1,10 @@
+# Salin menjadi android/key.properties (JANGAN di-commit) lalu isi.
+# Buat keystore sekali saja dan simpan cadangannya di tempat aman — kehilangan
+# keystore berarti tidak bisa lagi memperbarui aplikasi di Play Store.
+#
+#   keytool -genkey -v -keystore ~/smarttoko-upload.jks -keyalg RSA \
+#     -keysize 2048 -validity 10000 -alias upload
+storePassword=
+keyPassword=
+keyAlias=upload
+storeFile=/Users/NAMA/smarttoko-upload.jks

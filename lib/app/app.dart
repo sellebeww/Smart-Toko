@@ -5,16 +5,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/auth/auth_providers.dart';
+import '../features/backup/backup_trigger.dart';
 import '../features/auth/ui/login_screen.dart';
 import '../features/onboarding/ui/onboarding_screen.dart';
 import '../features/stores/domain/store_profile.dart';
 import '../features/stores/stores_providers.dart';
 import '../features/stores/ui/add_store_screen.dart';
 import '../features/stores/ui/store_list_screen.dart';
-import '../features/transactions/ui/home_screen.dart';
 import '../features/voice_capture/capture_controller.dart';
 import 'providers.dart';
-import 'sync_trigger.dart';
+import 'theme.dart';
+import 'main_shell.dart';
 
 class SmartTokoApp extends ConsumerStatefulWidget {
   final bool onboardingDone;
@@ -43,10 +44,7 @@ class _SmartTokoAppState extends ConsumerState<SmartTokoApp> {
       key: ValueKey(authState.value?.uid),
       title: 'SmartToko',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF00695C)),
-        useMaterial3: true,
-      ),
+      theme: SmartTokoTheme.light,
       home: authState.when(
         loading: () =>
             const Scaffold(body: Center(child: CircularProgressIndicator())),
@@ -88,6 +86,9 @@ class _StoreGate extends ConsumerWidget {
     final activeStoreId = ref.watch(activeStoreIdProvider);
 
     return storesAsync.when(
+      // Saat langganan dibuka ulang (mis. koneksi pulih), tetap tampilkan
+      // layar yang sedang dipakai alih-alih kembali ke indikator memuat.
+      skipLoadingOnReload: true,
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (error, _) => Scaffold(
@@ -111,7 +112,7 @@ class _StoreGate extends ConsumerWidget {
         if (active == null) return const StoreListScreen();
 
         return onboardingDone
-            ? const SyncTrigger(child: HomeScreen())
+            ? const BackupTrigger(child: MainShell())
             : OnboardingScreen(onDone: onOnboardingDone);
       },
     );

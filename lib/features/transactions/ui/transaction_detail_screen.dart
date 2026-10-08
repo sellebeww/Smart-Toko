@@ -10,7 +10,6 @@ import '../../../core/transaction_kind.dart';
 import '../../contacts/contacts_providers.dart';
 import '../domain/transaction_draft.dart';
 import '../domain/transaction_record.dart';
-import '../transactions_providers.dart';
 import 'transaction_editor.dart';
 
 final _transactionByIdProvider = FutureProvider.autoDispose
@@ -74,7 +73,6 @@ class TransactionDetailScreen extends ConsumerWidget {
     if (ok != true) return;
     await ref.read(transactionRepositoryProvider).delete(record.id);
     ref.read(dataRevisionProvider.notifier).bump();
-    ref.invalidate(pendingSyncCountProvider);
     if (!context.mounted) return;
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context)
@@ -85,7 +83,6 @@ class TransactionDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(_transactionByIdProvider(transactionId));
     final contactNames = ref.watch(contactNamesProvider).value ?? const {};
-    final pending = ref.watch(pendingTxIdsProvider).value ?? const {};
 
     return Scaffold(
       appBar: AppBar(title: const Text('Detail transaksi')),
@@ -102,7 +99,6 @@ class TransactionDetailScreen extends ConsumerWidget {
           return _DetailBody(
             record: record,
             contactName: contactName,
-            pendingSync: pending.contains(record.id),
             onCorrect: () => _correct(context, ref, record, contactName),
             onDelete: () => _delete(context, ref, record),
           );
@@ -115,14 +111,12 @@ class TransactionDetailScreen extends ConsumerWidget {
 class _DetailBody extends StatelessWidget {
   final TxRecord record;
   final String? contactName;
-  final bool pendingSync;
   final VoidCallback onCorrect;
   final VoidCallback onDelete;
 
   const _DetailBody({
     required this.record,
     required this.contactName,
-    required this.pendingSync,
     required this.onCorrect,
     required this.onDelete,
   });
@@ -182,12 +176,6 @@ class _DetailBody extends StatelessWidget {
               ),
               if (record.note case final note? when note.isNotEmpty)
                 _InfoRow(icon: Icons.notes, label: 'Catatan', value: note),
-              if (pendingSync)
-                const _InfoRow(
-                  icon: Icons.cloud_upload_outlined,
-                  label: 'Sinkron',
-                  value: 'Belum terkirim ke server',
-                ),
             ],
           ),
         ),

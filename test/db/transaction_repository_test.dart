@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:smart_toko/core/db/app_database.dart';
-import 'package:smart_toko/core/db/dao/settings_dao.dart';
 import 'package:smart_toko/core/db/dao/store_dao.dart';
 import 'package:smart_toko/core/transaction_kind.dart';
 import 'package:smart_toko/features/transactions/data/transaction_repository.dart';
@@ -78,70 +77,6 @@ void main() {
 
       expect(await database.db.query('transaction_items'), isEmpty);
     });
-  });
-
-  group('sinkronisasi bersifat gagal-tertutup', () {
-    test('tanpa baris setelan apa pun, tidak ada yang diantrekan', () async {
-      final confirmed = confirmDraftByUser(
-        draft: completeDraft(),
-        editedFields: const {},
-      )!;
-
-      await repository.save(confirmed, storeId: storeId);
-
-      expect(await database.db.query('pending_sync'), isEmpty);
-    });
-
-    test(
-      'sinkronisasi dimatikan secara eksplisit juga tidak mengantre',
-      () async {
-        await SettingsDao(database.db)
-            .setFlag(SettingsKeys.syncEnabled, value: false);
-        final confirmed = confirmDraftByUser(
-          draft: completeDraft(),
-          editedFields: const {},
-        )!;
-
-        await repository.save(confirmed, storeId: storeId);
-
-        expect(await database.db.query('pending_sync'), isEmpty);
-      },
-    );
-
-    test('hanya mengantre setelah pengguna menyalakannya', () async {
-      await SettingsDao(database.db)
-          .setFlag(SettingsKeys.syncEnabled, value: true);
-      final confirmed = confirmDraftByUser(
-        draft: completeDraft(),
-        editedFields: const {},
-      )!;
-
-      final record = await repository.save(confirmed, storeId: storeId);
-
-      final queued = await database.db.query('pending_sync');
-      expect(queued, hasLength(1));
-      expect(queued.first['entity_id'], record.id);
-      expect(queued.first['status'], 'pending');
-    });
-
-    test(
-      'antrean dan transaksi tertulis dalam satu transaksi basis data',
-      () async {
-        await SettingsDao(database.db)
-            .setFlag(SettingsKeys.syncEnabled, value: true);
-        final confirmed = confirmDraftByUser(
-          draft: completeDraft(),
-          editedFields: const {},
-        )!;
-
-        await repository.save(confirmed, storeId: storeId);
-
-        final transactions = await database.db.query('transactions');
-        final queued = await database.db.query('pending_sync');
-        expect(transactions, hasLength(1));
-        expect(queued, hasLength(1));
-      },
-    );
   });
 
   group('gerbang konfirmasi', () {

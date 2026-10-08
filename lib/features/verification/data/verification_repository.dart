@@ -2,9 +2,10 @@
 /// Storage, bucket `verifications`.
 ///
 /// Path-nya `{ownerUid}/{storeId}/...` supaya cocok dengan storage policy:
-/// hanya pemilik uid itu yang boleh baca/tulis (lihat skrip SQL setup). File-
-/// file ini TIDAK PERNAH dibaca balik oleh aplikasi (tidak ada layar yang
-/// menampilkan ulang KTP/selfie) dan tidak pernah ikut proses export mana pun.
+/// pemilik hanya bisa menulis ke folder tokonya sendiri selama toko itu belum
+/// diajukan/disetujui, dan hanya admin yang bisa membacanya selain pemilik
+/// (lihat skrip SQL setup). Aplikasi pemilik tidak pernah menampilkan ulang
+/// KTP/selfie, dan berkas ini tidak pernah ikut proses export mana pun.
 library;
 
 import 'dart:io';
@@ -12,6 +13,19 @@ import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 const String verificationBucket = 'verifications';
+
+/// Nama berkas tiap dokumen di folder `{ownerUid}/{storeId}/`.
+enum VerificationDocument {
+  ktp('ktp.jpg', 'KTP'),
+  storePhoto('store_photo.jpg', 'Foto toko'),
+  selfie('selfie.jpg', 'Selfie + KTP'),
+  nib('nib.jpg', 'NIB / izin usaha');
+
+  final String fileName;
+  final String label;
+
+  const VerificationDocument(this.fileName, this.label);
+}
 
 class VerificationRepository {
   final SupabaseClient _client;
@@ -38,15 +52,31 @@ class VerificationRepository {
         );
   }
 
-  Future<void> uploadKtp(String ownerUid, String storeId, File file) =>
-      _upload(ownerUid, storeId, 'ktp.jpg', file);
+  Future<void> upload(
+    String ownerUid,
+    String storeId,
+    VerificationDocument document,
+    File file,
+  ) => _upload(ownerUid, storeId, document.fileName, file);
 
-  Future<void> uploadStorePhoto(String ownerUid, String storeId, File file) =>
-      _upload(ownerUid, storeId, 'store_photo.jpg', file);
-
-  Future<void> uploadSelfie(String ownerUid, String storeId, File file) =>
-      _upload(ownerUid, storeId, 'selfie.jpg', file);
-
-  Future<void> uploadNib(String ownerUid, String storeId, File file) =>
-      _upload(ownerUid, storeId, 'nib.jpg', file);
+  /// Untuk panel admin: tautan sementara (10 menit) ke berkas yang
+  /// diunggah, atau null bila berkas itu tidak ada (NIB bersifat opsional).
+  Future<Map<VerificationDocument, String>> signedUrls(
+    String ownerUid,
+    String storeId,
+  ) async {
+    final bucket = _client.storage.from(verificationBucket);
+    final existing = {
+      for (final object in await bucket.list(path: '$ownerUid/$storeId'))
+        object.name,
+    };
+    return {
+      for (final document in VerificationDocument.values)
+        if (existing.contains(document.fileName))
+          document: await bucket.createSignedUrl(
+            '$ownerUid/$storeId/${document.fileName}',
+            600,
+          ),
+    };
+  }
 }

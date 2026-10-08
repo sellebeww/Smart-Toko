@@ -1,14 +1,28 @@
 /// Kredensial project Supabase.
 ///
 /// Key ini AMAN ditaruh di kode klien — perlindungan sesungguhnya ada di Row
-/// Level Security (RLS) policy yang dipasang di sisi database, bukan di
-/// kerahasiaan key ini. Isi dua nilai di bawah dari Project Settings > API
-/// setelah project Supabase dibuat (dashboard menyebutnya "anon" / "public"
-/// / "publishable" key — semuanya nilai yang sama).
+/// Level Security, hak kolom, dan fungsi di supabase/setup.sql, bukan di
+/// kerahasiaan key ini. Nilainya bisa diganti saat build untuk project lain
+/// (mis. staging):
+///
+///   flutter build appbundle \
+///     --dart-define=SUPABASE_URL=https://xxxx.supabase.co \
+///     --dart-define=SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 library;
 
 class SupabaseConfig {
-  static const String url = 'https://epuhvwdanllhvwwqmcpd.supabase.co';
-  static const String publishableKey =
-      'sb_publishable_vKVyyMYrIT8ds_73Y3HOWg_dqj_ODsc';
+  static const String url = String.fromEnvironment(
+    'SUPABASE_URL',
+    defaultValue: 'https://epuhvwdanllhvwwqmcpd.supabase.co',
+  );
+  static const String publishableKey = String.fromEnvironment(
+    'SUPABASE_PUBLISHABLE_KEY',
+    defaultValue: 'sb_publishable_vKVyyMYrIT8ds_73Y3HOWg_dqj_ODsc',
+  );
+
+  /// Bantuan AI butuh Edge Function `parse-transaction` yang sudah di-deploy
+  /// (lihat README). Selama belum, fitur ini disembunyikan dan tidak pernah
+  /// mengirim transkrip ke mana pun. Nyalakan saat build dengan
+  /// `--dart-define=AI_ASSIST=true`.
+  static const bool aiAssist = bool.fromEnvironment('AI_ASSIST');
 }

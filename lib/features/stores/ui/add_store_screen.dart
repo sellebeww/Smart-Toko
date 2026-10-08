@@ -1,6 +1,7 @@
 /// Form tambah toko. Wajib diisi minimal sekali per akun (gerbang di
 /// app/app.dart menampilkan ini kalau user belum punya toko sama sekali),
-/// dan bisa dibuka lagi kapan pun untuk menambah toko lain.
+/// dan bisa dibuka lagi kapan pun untuk menambah toko lain. Dengan
+/// [AddStoreScreen.existing], form yang sama dipakai mengubah profil toko.
 library;
 
 import 'package:flutter/material.dart';
@@ -14,7 +15,12 @@ import '../domain/store_profile.dart';
 class AddStoreScreen extends ConsumerStatefulWidget {
   final bool isFirstStore;
 
-  const AddStoreScreen({super.key, this.isFirstStore = true});
+  /// Diisi untuk mengubah profil toko yang sudah ada.
+  final StoreProfile? existing;
+
+  const AddStoreScreen({super.key, this.isFirstStore = true, this.existing});
+
+  bool get isEditing => existing != null;
 
   @override
   ConsumerState<AddStoreScreen> createState() => _AddStoreScreenState();
@@ -22,9 +28,14 @@ class AddStoreScreen extends ConsumerStatefulWidget {
 
 class _AddStoreScreenState extends ConsumerState<AddStoreScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _addressController = TextEditingController();
-  StoreCategory _category = StoreCategory.warteg;
+  late final _nameController = TextEditingController(
+    text: widget.existing?.name,
+  );
+  late final _addressController = TextEditingController(
+    text: widget.existing?.address,
+  );
+  late StoreCategory _category =
+      widget.existing?.category ?? StoreCategory.warteg;
   bool _submitting = false;
   String? _errorText;
 
@@ -35,13 +46,45 @@ class _AddStoreScreenState extends ConsumerState<AddStoreScreen> {
     super.dispose();
   }
 
+  Future<void> _saveEdit(StoreProfile store) async {
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref
+          .read(storeRepositoryProvider)
+          .updateProfile(
+            store.id,
+            name: _nameController.text.trim(),
+            category: _category,
+            address: _addressController.text.trim(),
+          );
+      if (!mounted) return;
+      navigator.pop();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Profil toko disimpan')),
+      );
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _errorText =
+              'Gagal menyimpan. Mengubah profil toko butuh koneksi internet.',
+        );
+      }
+    }
+  }
+
   Future<void> _submit() async {
     if (_submitting || !_formKey.currentState!.validate()) return;
     setState(() {
       _submitting = true;
       _errorText = null;
     });
-    // Diambil sebelum await: begitu toko baru muncul di Firestore, gerbang toko
+    if (widget.existing case final store?) {
+      await _saveEdit(store);
+      if (mounted) setState(() => _submitting = false);
+      return;
+    }
+    // Diambil sebelum await: begitu toko baru muncul di server, gerbang toko
     // bisa mengganti layar ini sebelum _submit selesai.
     final uid = ref.read(authStateChangesProvider).value!.uid;
     final storeDao = ref.read(storeDaoProvider);
@@ -56,7 +99,7 @@ class _AddStoreScreenState extends ConsumerState<AddStoreScreen> {
 
     try {
       // Baris lokal dan toko aktif disiapkan DULU, supaya saat toko ini
-      // muncul di Firestore gerbang langsung membuka Home tanpa singgah di
+      // muncul di server gerbang langsung membuka Home tanpa singgah di
       // daftar toko.
       await storeDao.ensureExists(id, name);
       if (!mounted) return;
@@ -92,7 +135,9 @@ class _AddStoreScreenState extends ConsumerState<AddStoreScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: widget.isFirstStore
+      appBar: widget.isEditing
+          ? AppBar(title: const Text('Ubah Profil Toko'))
+          : widget.isFirstStore
           ? null
           : AppBar(title: const Text('Tambah Toko')),
       body: SafeArea(
@@ -104,7 +149,7 @@ class _AddStoreScreenState extends ConsumerState<AddStoreScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (widget.isFirstStore) ...[
+                if (widget.isFirstStore && !widget.isEditing) ...[
                   const SizedBox(height: 24),
                   Text(
                     'Tambah Toko Baru',
@@ -122,6 +167,8 @@ class _AddStoreScreenState extends ConsumerState<AddStoreScreen> {
                 TextFormField(
                   controller: _nameController,
                   decoration: const InputDecoration(labelText: 'Nama toko'),
+                  maxLength: 100,
+                  textCapitalization: TextCapitalization.words,
                   validator: (value) => (value == null || value.trim().isEmpty)
                       ? 'Wajib diisi'
                       : null,
@@ -144,6 +191,7 @@ class _AddStoreScreenState extends ConsumerState<AddStoreScreen> {
                   controller: _addressController,
                   decoration: const InputDecoration(labelText: 'Alamat toko'),
                   maxLines: 2,
+                  maxLength: 300,
                   validator: (value) => (value == null || value.trim().isEmpty)
                       ? 'Wajib diisi'
                       : null,
@@ -164,7 +212,9 @@ class _AddStoreScreenState extends ConsumerState<AddStoreScreen> {
                           height: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Simpan Toko'),
+                      : Text(
+                          widget.isEditing ? 'Simpan Perubahan' : 'Simpan Toko',
+                        ),
                 ),
               ],
             ),

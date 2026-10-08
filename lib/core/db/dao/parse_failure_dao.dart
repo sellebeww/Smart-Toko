@@ -2,7 +2,7 @@
 ///
 /// Catatan ini LOKAL. Kolom `shared` tetap 0 sampai pengguna menyetujui
 /// pengiriman contoh ucapan untuk perbaikan parser — persetujuan yang terpisah
-/// dari sakelar sinkronisasi, karena transkrip bisa memuat hal pribadi.
+/// dari sakelar cadangan, karena transkrip bisa memuat hal pribadi.
 library;
 
 import 'package:sqflite/sqflite.dart';

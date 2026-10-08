@@ -3,18 +3,25 @@
 /// Semua sakelar privasi di sini bersifat GAGAL-TERTUTUP: bila barisnya tidak
 /// ada, nilainya false. Dengan begitu basis data yang baru dibuat, rusak
 /// sebagian, atau gagal dimigrasi tidak akan pernah berakhir dengan
-/// sinkronisasi atau pengiriman transkrip yang menyala tanpa sepengetahuan
+/// pencadangan atau pengiriman transkrip yang menyala tanpa sepengetahuan
 /// pengguna.
 library;
 
 import 'package:sqflite/sqflite.dart';
 
 class SettingsKeys {
-  static const String syncEnabled = 'sync_enabled';
+  static const String backupEnabled = 'backup_enabled';
   static const String llmEnabled = 'llm_enabled';
-  static const String qrisEnabled = 'qris_enabled';
   static const String onboardingDone = 'onboarding_done';
   static const String activeStoreId = 'active_store_id';
+
+  /// Per toko: waktu cadangan terakhir yang berhasil (milidetik epoch).
+  static String lastBackupAt(String storeId) => 'last_backup_at:$storeId';
+
+  /// Per toko: sidik isi data saat cadangan terakhir, supaya cadangan
+  /// otomatis tidak mengunggah ulang data yang tidak berubah.
+  static String lastBackupFingerprint(String storeId) =>
+      'last_backup_fingerprint:$storeId';
 }
 
 class SettingsDao {
@@ -46,9 +53,11 @@ class SettingsDao {
   Future<void> setFlag(String key, {required bool value}) =>
       setString(key, value ? 'true' : 'false');
 
-  Future<bool> syncEnabled() => getFlag(SettingsKeys.syncEnabled);
+  Future<void> remove(String key) async {
+    await db.delete('app_settings', where: 'key = ?', whereArgs: [key]);
+  }
+
+  Future<bool> backupEnabled() => getFlag(SettingsKeys.backupEnabled);
 
   Future<bool> llmEnabled() => getFlag(SettingsKeys.llmEnabled);
-
-  Future<bool> qrisEnabled() => getFlag(SettingsKeys.qrisEnabled);
 }

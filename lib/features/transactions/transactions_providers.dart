@@ -4,7 +4,6 @@ library;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
-import '../../core/db/dao/pending_sync_dao.dart';
 import '../../core/transaction_kind.dart';
 import 'domain/transaction_record.dart';
 
@@ -49,21 +48,4 @@ final todayTotalsProvider = FutureProvider<DayTotals>((ref) async {
   );
 
   return (masuk: masuk, keluar: keluar);
-});
-
-/// Id transaksi yang masih antre sinkron, untuk lencana di daftar.
-final pendingTxIdsProvider = FutureProvider.autoDispose<Set<String>>((
-  ref,
-) async {
-  ref.watch(dataRevisionProvider);
-  final enabled = await ref.watch(settingsDaoProvider).syncEnabled();
-  if (!enabled) return const {};
-  return PendingSyncDao(ref.watch(appDatabaseProvider).db)
-      .pendingEntityIds('transaction');
-});
-
-final pendingSyncCountProvider = FutureProvider<int>((ref) async {
-  final enabled = await ref.watch(settingsDaoProvider).syncEnabled();
-  if (!enabled) return 0;
-  return ref.watch(syncQueueProvider).pendingCount();
 });

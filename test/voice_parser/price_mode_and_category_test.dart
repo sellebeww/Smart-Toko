@@ -10,6 +10,13 @@ void main() {
   const parser = RuleBasedParser();
 
   group('harga per satuan atau total', () {
+    test('nominal dengan awalan Rp dibaca seperti nominal suara', () {
+      for (final price in ['Rp200.000', 'Rp 200.000', 'Rp.200.000', 'rp200rb']) {
+        final item = parser.parse('Beli ayam 5 kg $price').items.single;
+        expect(item.qty.value, 5);
+        expect(item.lineTotal, 200000, reason: price);
+      }
+    });
     test('contoh pitch deck: "beli ayam 5 kg 200 ribu" = total 200 ribu', () {
       final result = parser.parse('beli ayam 5 kg dua ratus ribu');
       final item = result.items.single;

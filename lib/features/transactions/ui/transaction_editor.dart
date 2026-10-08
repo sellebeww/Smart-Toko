@@ -11,7 +11,6 @@ import '../../contacts/ui/contact_picker_sheet.dart';
 import '../domain/confirmed_draft.dart';
 import '../domain/transaction_draft.dart';
 import '../domain/transaction_record.dart';
-import '../transactions_providers.dart';
 import 'confirmation_sheet.dart';
 
 /// Mengembalikan transaksi yang tersimpan, atau null bila dibatalkan.
@@ -44,13 +43,13 @@ Future<TxRecord?> showTransactionEditor(
             recordedBy: recordedBy,
           );
     ref.read(dataRevisionProvider.notifier).bump();
-    ref.invalidate(pendingSyncCountProvider);
     if (context.mounted) Navigator.of(context).pop();
   }
 
   await showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    showDragHandle: false,
     useSafeArea: true,
     builder: (_) => ConfirmationSheet(
       draft: draft,

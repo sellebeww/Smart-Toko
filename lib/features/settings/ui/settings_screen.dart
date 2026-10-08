@@ -1,20 +1,26 @@
-/// Pengaturan privasi.
+/// Pengaturan akun, toko, dan privasi.
 ///
-/// Semua sakelar di layar ini bawaannya MATI, dan masing-masing menyebutkan
-/// secara spesifik apa yang terjadi bila dinyalakan. Sakelar "Bantuan AI"
-/// sengaja dipisah dari "Sinkronisasi" walau keduanya sama-sama mengirim data
-/// keluar: tujuan, penerima, dan isinya berbeda, jadi persetujuannya juga harus
-/// terpisah.
+/// Semua sakelar pengiriman data bawaannya MATI, dan masing-masing
+/// menyebutkan secara spesifik apa yang terjadi bila dinyalakan. "Bantuan AI"
+/// sengaja dipisah dari "Cadangan cloud" walau keduanya sama-sama mengirim
+/// data keluar: tujuan, penerima, dan isinya berbeda, jadi persetujuannya
+/// juga harus terpisah.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
+import '../../../core/format.dart';
+import '../../../core/supabase_config.dart';
+import '../../account/account_deletion_service.dart';
 import '../../auth/auth_providers.dart';
+import '../../backup/backup_actions.dart';
+import '../../backup/backup_providers.dart';
 import '../../stores/domain/store_profile.dart';
 import '../../stores/stores_providers.dart';
-import '../../transactions/transactions_providers.dart';
+import '../../stores/ui/add_store_screen.dart';
+import '../../verification/admin_providers.dart';
 import '../../verification/domain/verification_status.dart';
 import '../../verification/ui/admin_verification_screen.dart';
 import '../../verification/ui/consent_screen.dart';
@@ -27,6 +33,7 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsControllerProvider);
+    final isAdmin = ref.watch(isAdminProvider).value ?? false;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Pengaturan')),
@@ -38,74 +45,81 @@ class SettingsScreen extends ConsumerWidget {
             const _SectionHeader('Akun'),
             const _AccountTile(),
             const Divider(),
-            const _SectionHeader('Verifikasi Toko'),
-            const _VerificationTile(),
+            const _SectionHeader('Toko'),
+            const _StoreTile(),
             const Divider(),
             const _SectionHeader('Data kamu'),
             const _OwnershipNote(),
             SwitchListTile(
-              value: state.syncEnabled,
-              onChanged: !state.syncEnabled
-                  ? null
-                  : (value) => ref
-                        .read(settingsControllerProvider.notifier)
-                        .setSyncEnabled(value: value),
-              title: const Text('Cadangkan ke cloud'),
+              value: state.backupEnabled,
+              onChanged: (value) => _setBackup(context, ref, value),
+              title: const Text('Cadangkan otomatis ke cloud'),
               subtitle: const Text(
-                'Belum tersedia di versi ini. Catatan transaksi tersimpan '
-                'di HP ini dan belum dicadangkan ke server.',
+                'Kalau dinyalakan, salinan transaksi, barang, stok, dan kontak '
+                'toko ini disimpan di akunmu, supaya bisa dipulihkan bila HP '
+                'hilang atau ganti HP. Hanya kamu yang bisa membukanya.',
               ),
             ),
-            if (state.syncEnabled) const _SyncStatusTile(),
+            _BackupTile(enabled: state.backupEnabled),
             const Divider(),
-            const _SectionHeader('Bantuan AI untuk ucapan sulit'),
-            SwitchListTile(
-              value: state.llmEnabled,
-              onChanged: state.hasApiKey
-                  ? (value) => ref
-                        .read(settingsControllerProvider.notifier)
-                        .setLlmEnabled(value: value)
-                  : null,
-              title: const Text('Pakai AI saat ucapan sulit diurai'),
-              subtitle: Text(
-                state.hasApiKey
-                    ? 'Kalau dinyalakan, KALIMAT YANG KAMU UCAPKAN dikirim ke '
-                          'layanan AI pihak ketiga, hanya ketika pengurai biasa '
-                          'gagal dan HP sedang online.'
-                    : 'Isi kunci API dulu di bawah.',
-              ),
-            ),
-            _ApiKeyTile(hasKey: state.hasApiKey),
-            const Divider(),
-            const _SectionHeader('Tangkap notifikasi QRIS'),
-            const SwitchListTile(
-              value: false,
-              onChanged: null,
-              title: Text('Catat otomatis dari notifikasi QRIS'),
-              subtitle: Text(
-                'Belum tersedia. Nanti fitur ini harus dinyalakan sendiri, '
-                'hanya membaca notifikasi dari aplikasi pembayaran yang kamu '
-                'pilih, dan hasilnya tetap harus kamu konfirmasi dulu.',
-              ),
-            ),
-            const Divider(),
-            const _SectionHeader('Demo'),
-            ListTile(
-              leading: const Icon(Icons.admin_panel_settings_outlined),
-              title: const Text('Admin: Kelola Verifikasi'),
-              subtitle: const Text(
-                'Simulasi peninjauan admin untuk demo — bukan sistem role sungguhan.',
-              ),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const AdminVerificationScreen(),
+            if (SupabaseConfig.aiAssist) ...[
+              const _SectionHeader('Bantuan AI untuk ucapan sulit'),
+              SwitchListTile(
+                value: state.llmEnabled,
+                onChanged: (value) => ref
+                    .read(settingsControllerProvider.notifier)
+                    .setLlmEnabled(value: value),
+                title: const Text('Pakai AI saat ucapan sulit diurai'),
+                subtitle: const Text(
+                  'Kalau dinyalakan, KALIMAT YANG KAMU UCAPKAN dikirim ke server '
+                  'SmartToko lalu ke layanan AI (Anthropic) untuk diurai, hanya '
+                  'ketika pengurai di HP gagal dan HP sedang online. Hasilnya '
+                  'tetap harus kamu periksa sebelum disimpan.',
                 ),
               ),
-            ),
+            ],
+            if (isAdmin) ...[
+              const Divider(),
+              const _SectionHeader('Admin'),
+              ListTile(
+                leading: const Icon(Icons.admin_panel_settings_outlined),
+                title: const Text('Tinjau pengajuan verifikasi'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const AdminVerificationScreen(),
+                  ),
+                ),
+              ),
+            ],
+            const Divider(),
+            const _SectionHeader('Zona berbahaya'),
+            const _DeleteAccountTile(),
+            const SizedBox(height: 24),
           ],
         ),
       ),
     );
+  }
+
+  /// Menyalakan cadangan langsung membuat cadangan pertama, supaya
+  /// pengguna tahu saat itu juga apakah berhasil.
+  Future<void> _setBackup(
+    BuildContext context,
+    WidgetRef ref,
+    bool value,
+  ) async {
+    await ref
+        .read(settingsControllerProvider.notifier)
+        .setBackupEnabled(value: value);
+    if (!value || !context.mounted) return;
+    // Batal menimpa cadangan lama = cadangan otomatis juga tidak boleh
+    // menimpanya nanti, jadi sakelarnya dikembalikan.
+    if (!await backupNow(context, ref)) {
+      await ref
+          .read(settingsControllerProvider.notifier)
+          .setBackupEnabled(value: false);
+    }
   }
 }
 
@@ -150,9 +164,10 @@ class _OwnershipNote extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Semua catatan transaksi tersimpan di HP ini saja dan tidak '
-              'dikirim ke mana pun kecuali kamu menyalakannya sendiri di bawah. '
-              'Akun, profil toko, dan foto verifikasi yang kamu kirim disimpan di server. Catatanmu bukan '
+              'Catatan transaksi disimpan di HP ini dan tetap bisa dipakai '
+              'tanpa internet. Catatan hanya dikirim ke server bila kamu '
+              'menyalakan cadangan di bawah. Akun, profil toko, dan foto '
+              'verifikasi yang kamu kirim disimpan di server. Catatanmu bukan '
               'milik kami dan tidak dibagikan ke pihak mana pun.',
               style: theme.textTheme.bodySmall,
             ),
@@ -193,8 +208,8 @@ class _AccountTile extends ConsumerWidget {
   }
 }
 
-class _VerificationTile extends ConsumerWidget {
-  const _VerificationTile();
+class _StoreTile extends ConsumerWidget {
+  const _StoreTile();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -202,19 +217,21 @@ class _VerificationTile extends ConsumerWidget {
 
     return storeAsync.when(
       loading: () => const ListTile(title: Text('Memuat...')),
-      error: (error, _) => ListTile(title: Text('Gagal memuat toko: $error')),
-      data: (store) => _VerificationBody(store: store),
+      error: (error, _) =>
+          const ListTile(title: Text('Data toko belum bisa dimuat.')),
+      data: (store) => _StoreBody(store: store),
     );
   }
 }
 
-class _VerificationBody extends StatelessWidget {
+class _StoreBody extends StatelessWidget {
   final StoreProfile store;
 
-  const _VerificationBody({required this.store});
+  const _StoreBody({required this.store});
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final status = store.verificationStatus;
     final canStart =
         status == StoreVerificationStatus.unverified ||
@@ -228,8 +245,39 @@ class _VerificationBody extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(store.name, overflow: TextOverflow.ellipsis),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      store.name,
+                      style: theme.textTheme.titleMedium,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      '${store.category.label} · ${store.address}',
+                      style: theme.textTheme.bodySmall,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
+              IconButton(
+                tooltip: 'Ubah profil toko',
+                icon: const Icon(Icons.edit_outlined),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => AddStoreScreen(existing: store),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Text('Verifikasi', style: theme.textTheme.bodyMedium),
+              const Spacer(),
               VerificationStatusBadge(status: status),
             ],
           ),
@@ -238,7 +286,7 @@ class _VerificationBody extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'Alasan: ${store.rejectionReason}',
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+              style: TextStyle(color: theme.colorScheme.error),
             ),
           ],
           if (status == StoreVerificationStatus.pending) ...[
@@ -251,7 +299,7 @@ class _VerificationBody extends StatelessWidget {
             const SizedBox(height: 12),
             OutlinedButton(
               onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(
+                MaterialPageRoute<void>(
                   builder: (_) =>
                       ConsentScreen(storeId: store.id, storeName: store.name),
                 ),
@@ -259,7 +307,7 @@ class _VerificationBody extends StatelessWidget {
               child: Text(
                 status == StoreVerificationStatus.rejected
                     ? 'Ajukan Ulang'
-                    : 'Mulai Verifikasi',
+                    : 'Mulai Verifikasi (opsional)',
               ),
             ),
           ],
@@ -269,100 +317,195 @@ class _VerificationBody extends StatelessWidget {
   }
 }
 
-class _SyncStatusTile extends ConsumerWidget {
-  const _SyncStatusTile();
+class _BackupTile extends ConsumerStatefulWidget {
+  final bool enabled;
+
+  const _BackupTile({required this.enabled});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final pending = ref.watch(pendingSyncCountProvider);
+  ConsumerState<_BackupTile> createState() => _BackupTileState();
+}
 
-    return ListTile(
-      leading: const Icon(Icons.cloud_upload_outlined),
-      title: Text('Menunggu terkirim: ${pending.value ?? 0}'),
-      subtitle: const Text(
-        'Dikirim saat aplikasi dibuka dan koneksi tersedia. '
-        'Tidak ada pengiriman di latar belakang.',
-      ),
-      trailing: TextButton(
-        onPressed: () async {
-          await ref.read(syncQueueProvider).retryFailed();
-          ref.invalidate(pendingSyncCountProvider);
-        },
-        child: const Text('Coba lagi'),
+class _BackupTileState extends ConsumerState<_BackupTile> {
+  bool _busy = false;
+
+  Future<void> _run(Future<void> Function() action) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await action();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _restore() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Pulihkan dari cadangan?'),
+        content: const Text(
+          'Semua transaksi, barang, stok, dan kontak toko ini di HP ini akan '
+          'DIGANTI dengan isi cadangan terakhir di cloud. Catatan yang belum '
+          'sempat dicadangkan akan hilang.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Pulihkan'),
+          ),
+        ],
       ),
     );
-  }
-}
-
-class _ApiKeyTile extends ConsumerStatefulWidget {
-  final bool hasKey;
-
-  const _ApiKeyTile({required this.hasKey});
-
-  @override
-  ConsumerState<_ApiKeyTile> createState() => _ApiKeyTileState();
-}
-
-class _ApiKeyTileState extends ConsumerState<_ApiKeyTile> {
-  final _controller = TextEditingController();
-  bool _editing = false;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+    if (ok != true || !mounted) return;
+    await _run(() => restoreBackup(context, ref));
   }
 
   @override
   Widget build(BuildContext context) {
-    if (widget.hasKey && !_editing) {
-      return ListTile(
-        leading: const Icon(Icons.key),
-        title: const Text('Kunci API tersimpan'),
-        subtitle: const Text(
-          'Disimpan di penyimpanan aman HP, bukan di kode aplikasi.',
+    final last = ref.watch(backupStatusProvider).value;
+
+    return Column(
+      children: [
+        ListTile(
+          leading: const Icon(Icons.cloud_done_outlined),
+          title: Text(
+            last == null
+                ? 'Belum pernah dicadangkan dari HP ini'
+                : 'Cadangan terakhir: ${formatShortDate(last)}, ${formatTime(last)}',
+          ),
+          subtitle: Text(
+            widget.enabled
+                ? 'Dicadangkan saat aplikasi dibuka atau ditutup bila ada '
+                      'perubahan. Tidak ada pengiriman di latar belakang.'
+                : 'Cadangan otomatis mati. Kamu tetap bisa mencadangkan manual.',
+          ),
+          trailing: _busy
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : TextButton(
+                  onPressed: () => _run(() => backupNow(context, ref)),
+                  child: const Text('Cadangkan'),
+                ),
         ),
-        trailing: TextButton(
-          onPressed: () =>
-              ref.read(settingsControllerProvider.notifier).clearApiKey(),
-          child: const Text('Hapus'),
+        ListTile(
+          leading: const Icon(Icons.settings_backup_restore),
+          title: const Text('Pulihkan dari cadangan'),
+          subtitle: const Text(
+            'Ganti data toko di HP ini dengan isi cadangan.',
+          ),
+          enabled: !_busy,
+          onTap: _restore,
+        ),
+      ],
+    );
+  }
+}
+
+class _DeleteAccountTile extends ConsumerStatefulWidget {
+  const _DeleteAccountTile();
+
+  @override
+  ConsumerState<_DeleteAccountTile> createState() => _DeleteAccountTileState();
+}
+
+class _DeleteAccountTileState extends ConsumerState<_DeleteAccountTile> {
+  bool _deleting = false;
+
+  Future<void> _delete() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final controller = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Hapus akun permanen?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Akun, semua toko, foto verifikasi, cadangan cloud, dan semua '
+                'catatan toko di HP ini akan dihapus. Ini tidak bisa '
+                'dibatalkan. Export ke Excel dulu bila ingin menyimpan '
+                'catatanmu.',
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  labelText: 'Ketik HAPUS untuk melanjutkan',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+              ),
+              onPressed: controller.text.trim() == 'HAPUS'
+                  ? () => Navigator.of(context).pop(true)
+                  : null,
+              child: const Text('Hapus akun'),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    if (ok != true || !mounted) return;
+
+    final uid = ref.read(authStateChangesProvider).value?.uid;
+    if (uid == null) return;
+    setState(() => _deleting = true);
+    try {
+      await ref
+          .read(accountDeletionServiceProvider)
+          .deleteAccount(uid)
+          .timeout(const Duration(seconds: 60));
+      // Gerbang login di app.dart mengganti layar begitu sesi berakhir.
+    } catch (_) {
+      if (mounted) setState(() => _deleting = false);
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Akun belum terhapus. Periksa koneksi internet lalu coba lagi.',
+          ),
         ),
       );
     }
+  }
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextField(
-            controller: _controller,
-            obscureText: true,
-            decoration: const InputDecoration(
-              labelText: 'Kunci API',
-              border: OutlineInputBorder(),
-              helperText:
-                  'Kunci milikmu sendiri. Tidak pernah ikut ke dalam APK.',
-              helperMaxLines: 2,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerRight,
-            child: FilledButton(
-              onPressed: () async {
-                if (_controller.text.trim().isEmpty) return;
-                await ref
-                    .read(settingsControllerProvider.notifier)
-                    .saveApiKey(_controller.text);
-                _controller.clear();
-                if (mounted) setState(() => _editing = false);
-              },
-              child: const Text('Simpan kunci'),
-            ),
-          ),
-        ],
-      ),
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.error;
+    return ListTile(
+      leading: Icon(Icons.delete_forever_outlined, color: color),
+      title: Text('Hapus akun', style: TextStyle(color: color)),
+      subtitle: const Text('Menghapus akun dan seluruh datanya.'),
+      enabled: !_deleting,
+      trailing: _deleting
+          ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : null,
+      onTap: _delete,
     );
   }
 }

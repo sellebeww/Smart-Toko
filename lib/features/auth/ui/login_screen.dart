@@ -10,8 +10,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../app/providers.dart';
+import '../../../app/theme.dart';
+import '../../../core/ui/brand.dart';
+import 'auth_messages.dart';
 import 'register_screen.dart';
 import 'reset_password_screen.dart';
+import 'verify_email_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -26,6 +30,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _submitting = false;
   bool _obscurePassword = true;
+  bool _needsConfirmation = false;
   String? _errorText;
 
   @override
@@ -40,6 +45,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() {
       _submitting = true;
       _errorText = null;
+      _needsConfirmation = false;
     });
     try {
       await ref
@@ -49,7 +55,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             password: _passwordController.text,
           );
     } on AuthException catch (e) {
-      if (mounted) setState(() => _errorText = _messageFor(e));
+      if (mounted) {
+        setState(() {
+          _errorText = authErrorMessage(e);
+          _needsConfirmation = e.code == 'email_not_confirmed';
+        });
+      }
     } catch (_) {
       if (mounted) {
         setState(() => _errorText = 'Terjadi gangguan. Silakan coba lagi.');
@@ -68,130 +79,177 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('SmartToko', style: theme.textTheme.displaySmall),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Masuk untuk mengelola tokomu.',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    autofillHints: const [AutofillHints.email],
-                    textInputAction: TextInputAction.next,
-                    autocorrect: false,
-                    decoration: const InputDecoration(labelText: 'Email'),
-                    validator: (value) =>
-                        (value == null ||
-                            !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
-                                .hasMatch(value.trim()))
-                        ? 'Masukkan email yang valid'
-                        : null,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    autofillHints: const [AutofillHints.password],
-                    decoration: InputDecoration(
-                      labelText: 'Kata sandi',
-                      suffixIcon: IconButton(
-                        tooltip: _obscurePassword
-                            ? 'Tampilkan kata sandi'
-                            : 'Sembunyikan kata sandi',
-                        onPressed: () => setState(
-                          () => _obscurePassword = !_obscurePassword,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const BrandHeader(),
+                      const SizedBox(height: 32),
+                      Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [
+                              SmartTokoTheme.forest,
+                              SmartTokoTheme.green,
+                            ],
+                            begin: Alignment.bottomLeft,
+                            end: Alignment.topRight,
+                          ),
+                          borderRadius: BorderRadius.circular(28),
                         ),
-                        icon: Icon(
-                          _obscurePassword
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
-                        ),
-                      ),
-                    ),
-                    validator: (value) => (value == null || value.length < 6)
-                        ? 'Minimal 6 karakter'
-                        : null,
-                  ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: _submitting
-                          ? null
-                          : () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => ResetPasswordScreen(
-                                  initialEmail: _emailController.text.trim(),
-                                ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(
+                              Icons.auto_awesome,
+                              color: SmartTokoTheme.lime,
+                              size: 28,
+                            ),
+                            const SizedBox(height: 20),
+                            Text(
+                              'Usaha jalan.\nCatatan rapi.',
+                              style: theme.textTheme.headlineLarge?.copyWith(
+                                color: Colors.white,
                               ),
                             ),
-                      child: const Text('Lupa kata sandi?'),
-                    ),
-                  ),
-                  if (_errorText != null) ...[
-                    const SizedBox(height: 16),
-                    Text(
-                      _errorText!,
-                      style: TextStyle(color: theme.colorScheme.error),
-                    ),
-                  ],
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: _submitting ? null : _submit,
-                    child: _submitting
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Masuk'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: _submitting
-                        ? null
-                        : () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const RegisterScreen(),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Catat dengan suara, pantau penjualan,\ndan kelola stok dalam satu tempat.',
+                              style: TextStyle(
+                                color: Color(0xFFE2F1D7),
+                                height: 1.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      Text(
+                        'Selamat datang kembali',
+                        style: theme.textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Masuk untuk mengelola tokomu.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      TextFormField(
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        autofillHints: const [AutofillHints.email],
+                        textInputAction: TextInputAction.next,
+                        autocorrect: false,
+                        decoration: const InputDecoration(
+                          labelText: 'Email',
+                          prefixIcon: Icon(Icons.mail_outline),
+                          hintText: 'nama@email.com',
+                        ),
+                        validator: validateEmail,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _passwordController,
+                        obscureText: _obscurePassword,
+                        autofillHints: const [AutofillHints.password],
+                        onFieldSubmitted: (_) => _submit(),
+                        decoration: InputDecoration(
+                          labelText: 'Kata sandi',
+                          prefixIcon: const Icon(Icons.lock_outline),
+                          suffixIcon: IconButton(
+                            tooltip: _obscurePassword
+                                ? 'Tampilkan kata sandi'
+                                : 'Sembunyikan kata sandi',
+                            onPressed: () => setState(
+                              () => _obscurePassword = !_obscurePassword,
+                            ),
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
                             ),
                           ),
-                    child: const Text('Belum punya akun? Daftar'),
+                        ),
+                        validator: (value) =>
+                            (value == null || value.length < 6)
+                            ? 'Minimal 6 karakter'
+                            : null,
+                      ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _submitting
+                              ? null
+                              : () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => ResetPasswordScreen(
+                                      initialEmail: _emailController.text
+                                          .trim(),
+                                    ),
+                                  ),
+                                ),
+                          child: const Text('Lupa kata sandi?'),
+                        ),
+                      ),
+                      if (_errorText != null) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          _errorText!,
+                          style: TextStyle(color: theme.colorScheme.error),
+                        ),
+                      ],
+                      if (_needsConfirmation)
+                        TextButton(
+                          onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => VerifyEmailScreen(
+                                email: _emailController.text.trim(),
+                                sendOnOpen: true,
+                              ),
+                            ),
+                          ),
+                          child: const Text('Masukkan kode konfirmasi'),
+                        ),
+                      const SizedBox(height: 24),
+                      FilledButton(
+                        onPressed: _submitting ? null : _submit,
+                        child: _submitting
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text('Masuk'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextButton(
+                        onPressed: _submitting
+                            ? null
+                            : () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const RegisterScreen(),
+                                ),
+                              ),
+                        child: const Text('Belum punya akun? Daftar'),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
         ),
       ),
     );
-  }
-
-  String _messageFor(AuthException e) {
-    switch (e.code) {
-      case 'invalid_credentials':
-        return 'Email atau kata sandi salah';
-      case 'email_not_confirmed':
-        return 'Email belum dikonfirmasi. Cek kotak masuk emailmu.';
-      case 'validation_failed':
-      case 'email_address_invalid':
-        return 'Format email tidak valid';
-      case 'over_request_rate_limit':
-      case 'over_email_send_rate_limit':
-        return 'Terlalu banyak percobaan, coba lagi nanti';
-      default:
-        if (e.statusCode == null) {
-          return 'Gagal terhubung ke server, cek koneksi internet';
-        }
-        return e.message;
-    }
   }
 }

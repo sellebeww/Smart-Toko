@@ -34,17 +34,20 @@ bukan oleh konvensi.
 
 Pembatasan lingkup adalah keputusan arsitektur, bukan kekurangan.
 
-- **Bukan aplikasi pembukuan lengkap.** Tanpa manajemen stok, utang/piutang,
-  faktur, multi-pengguna, atau pelaporan pajak. Bersaing fitur-lawan-fitur
+- **Bukan aplikasi pembukuan lengkap.** Tanpa utang/piutang, faktur,
+  multi-pengguna per toko, atau pelaporan pajak. Bersaing fitur-lawan-fitur
   dengan BukuWarung/BukuKas adalah pertarungan yang tidak mungkin dimenangkan
   dan akan mengaburkan satu-satunya keunggulan yang dimiliki.
-- **Laporan dibuat sederhana**: total masuk/keluar hari ini dan daftar
-  transaksi. Cukup untuk menjawab "hari ini dapat berapa".
+- **Katalog, stok, dan kontak tumbuh dari transaksi**, bukan diisi terpisah:
+  barang yang dijual menjadi menu, barang yang dibeli menjadi bahan dan
+  menambah stok. Pengguna tidak dipaksa "mengatur toko" sebelum mencatat.
+- **Laporan dibuat sederhana**: total per kategori, menu terlaris, dan export
+  Excel. Cukup untuk menjawab "hari ini dapat berapa" dan "uangnya ke mana".
 - **Tanpa *wake word* selalu-aktif.** Secara teknis memungkinkan, tetapi
   mikrofon yang menyala terus-menerus boros baterai dan — lebih penting —
   memperkuat persis kecurigaan yang ingin dihindari. Ditolak secara sadar.
-- **Tanpa layanan latar belakang.** Sinkronisasi hanya berjalan saat aplikasi
-  dibuka. Ini memang membuat data kurang segar, tetapi memungkinkan pernyataan
+- **Tanpa layanan latar belakang.** Pencadangan hanya berjalan saat aplikasi
+  dibuka atau sesaat ketika ditinggalkan. Ini memang membuat data kurang segar, tetapi memungkinkan pernyataan
   jujur kepada pengguna: aplikasi ini tidak melakukan apa pun saat tidak dibuka.
 
 ---
@@ -54,7 +57,7 @@ Pembatasan lingkup adalah keputusan arsitektur, bukan kekurangan.
 ### 3.1 Manajemen state: Riverpod
 
 **Alasan utama: banyak logika aplikasi ini hidup di luar widget tree.** Callback
-aliran STT, pemicu antrean sinkronisasi, dan pemantau konektivitas semuanya
+aliran STT, pemicu pencadangan, dan pemantau konektivitas semuanya
 membutuhkan akses dependensi tanpa `BuildContext`. Provider mensyaratkan
 `BuildContext` untuk `read`; Riverpod tidak.
 
@@ -62,8 +65,8 @@ Alasan pendukung:
 - `AsyncValue` memodelkan triad memuat/galat/data secara bawaan. Jalur STT dan
   LLM memang rawan gagal, sehingga kondisi "gagal → tawarkan manual" menjadi
   *state* bertipe, bukan tumpukan variabel boolean yang mudah tidak sinkron.
-- `ProviderContainer` dan mekanisme *override* membuat parser serta antrean
-  sinkronisasi dapat diuji tanpa UI. Ini penting karena parser adalah komponen
+- `ProviderContainer` dan mekanisme *override* membuat parser serta layanan
+  cadangan dapat diuji tanpa UI. Ini penting karena parser adalah komponen
   paling rapuh dan akan sering diiterasi.
 
 **Yang dikorbankan.** Riverpod punya kurva belajar lebih curam daripada
@@ -78,10 +81,11 @@ cermin — bukan sebaliknya.
 
 Alasan memilih sqflite dibanding Hive:
 
-1. **Atomisitas.** Penulisan baris transaksi dan baris antrean sinkronisasinya
-   harus menjadi satu kesatuan. Bila aplikasi mati di antara keduanya, hasilnya
-   adalah data yang hilang atau terkirim ganda. SQLite menyediakan transaksi
-   sungguhan; Hive tidak menjaminnya antar-*box*.
+1. **Atomisitas.** Penulisan transaksi, barangnya, katalog, dan pergerakan
+   stoknya harus menjadi satu kesatuan; begitu juga pemulihan cadangan yang
+   mengganti seluruh data toko. Bila aplikasi mati di tengah jalan, hasilnya
+   tidak boleh setengah jadi. SQLite menyediakan transaksi sungguhan; Hive
+   tidak menjaminnya antar-*box*.
 2. **Agregasi.** "Total hari ini" adalah `SUM ... WHERE` di SQL dan tetap murah
    ketika baris menumpuk. Di Hive, agregasi berarti memuat seluruh data ke
    memori lalu melipatnya di Dart.
@@ -102,15 +106,29 @@ ini diimbangi dengan menempatkan seluruh SQL di kelas DAO yang diuji.
 
 ## 4. Model Data
 
+Lokal (SQLite, sumber kebenaran catatan):
+
 ```
-stores(id, name, verification_status, created_at)
-transactions(id, store_id, direction, occurred_at, note, source, total_amount, …)
-transaction_items(id, transaction_id, name, qty, unit_price, line_total, …)
-pending_sync(id, entity_type, entity_id, op, payload_json, attempt_count,
-             next_attempt_at, last_error, status, created_at)
+stores(id, owner_uid, name, category, address, verification_status, …)  -- salinan dari server
+transactions(id, store_id, direction, category, occurred_at, source, total_amount, contact_id, …)
+transaction_items(id, transaction_id, name, qty, unit_price, line_total, unit, product_id, …)
+products(id, store_id, kind, name, name_key, unit, default_price, …)
+stock_movements(id, store_id, product_id, qty_delta, reason, transaction_item_id, …)
+contacts(id, store_id, kind, name, location, phone, note, …)
 parse_failures(id, transcript, stt_confidence, parser_version, reason, …)
 consents(id, kind, granted, consent_text_version, granted_at, revoked_at)
 app_settings(key, value)
+```
+
+Server (Supabase, lihat `supabase/setup.sql`):
+
+```
+stores                 profil toko + status verifikasi (sumber kebenaran profil)
+admins                 akun peninjau verifikasi
+verification_reviews   jejak audit setiap keputusan admin
+llm_usage              kuota harian bantuan AI per akun
+storage: verifications/{uid}/{storeId}/*.jpg   foto KTP, toko, selfie, NIB
+storage: backups/{uid}/{storeId}.json.gz       cadangan utuh per toko
 ```
 
 Dua keputusan yang perlu disorot:
@@ -134,7 +152,7 @@ Tombol rekam
    └─ SpeechService          luring dicoba lebih dulu, daring sebagai cadangan
         └─ ParserPipeline    aturan cepat, LLM hanya bila mentok
              └─ Layar konfirmasi   WAJIB
-                  └─ Repository    tulis lokal (+ antre bila sync menyala)
+                  └─ Repository    tulis lokal (cadangan menyusul bila dinyalakan)
 ```
 
 ### 5.1 Model keyakinan dan satu jebakan penting
@@ -225,12 +243,13 @@ sebagai kasus uji **sebelum** aturannya diperbaiki.
 
 Seluruh sakelar privasi bernilai `false` ketika barisnya tidak ada di basis data
 (`SettingsDao.getFlag`). Basis data yang baru dibuat, rusak sebagian, atau gagal
-dimigrasi karena itu tidak akan pernah berakhir dengan sinkronisasi menyala
-tanpa sepengetahuan pengguna.
+dimigrasi karena itu tidak akan pernah berakhir dengan pencadangan atau bantuan
+AI menyala tanpa sepengetahuan pengguna.
 
 ### 7.2 Titik-sempit payload
 
-Semua data yang keluar perangkat melewati `SyncPayloadBuilder`. Penyaringan
+Semua catatan yang keluar perangkat — termasuk isi cadangan — melewati
+`SyncPayloadBuilder`. Penyaringan
 field identitas dilakukan sebagai langkah **terakhir dan tanpa syarat**, secara
 rekursif termasuk ke dalam peta dan daftar bersarang. Artinya penambahan entitas
 baru di kemudian hari tidak dapat membocorkan data KTP hanya karena penulisnya
@@ -242,12 +261,12 @@ identitas tanpa persetujuan.
 
 ### 7.3 Dua sakelar terpisah, bukan satu
 
-Sinkronisasi dan bantuan AI sama-sama mengirim data keluar perangkat, tetapi
+Pencadangan dan bantuan AI sama-sama mengirim data keluar perangkat, tetapi
 tujuan, penerima, dan isinya berbeda:
 
-- Sinkronisasi mengirim **catatan transaksi** ke server aplikasi.
-- Bantuan AI mengirim **kalimat yang diucapkan pengguna** ke layanan pihak
-  ketiga.
+- Pencadangan mengirim **catatan toko** ke penyimpanan milik akun pengguna.
+- Bantuan AI mengirim **kalimat yang diucapkan pengguna** ke server aplikasi
+  lalu ke layanan AI pihak ketiga.
 
 Menggabungkan keduanya di bawah satu sakelar akan membuat persetujuan menjadi
 tidak bermakna. Karena itu keduanya dipisah, masing-masing dengan penjelasan
@@ -262,21 +281,38 @@ transkrip masih terkirim.
 
 Toko berstatus `unverified` secara bawaan dan **berfungsi penuh**. Verifikasi
 hanya menambahkan lencana. Ini yang menjaga agar pengumpulan data KTP benar-benar
-opsional, bukan syarat terselubung untuk memakai aplikasi. Unggah dan enkripsi
-KTP belum diimplementasikan pada tahap ini; yang sudah ada adalah status,
-lencana, dan tabel persetujuan.
+opsional, bukan syarat terselubung untuk memakai aplikasi.
 
-### 7.5 Kunci API
+Pengamannya ada di server, bukan di aplikasi:
 
-Kunci API untuk bantuan AI dimasukkan sendiri oleh pengguna dan disimpan di
-Keystore/Keychain perangkat. **Kunci tidak pernah ditulis di kode sumber maupun
-ikut dibundel ke dalam APK.**
+- Klien hanya punya hak tulis ke kolom `name`, `category`, `address` tabel
+  `stores` (hak kolom Postgres). Pemilik tidak bisa menandai tokonya sendiri
+  terverifikasi, apa pun yang dikirim aplikasinya.
+- Pengajuan lewat `submit_store_verification`, yang memeriksa kepemilikan,
+  status, dan keberadaan tiga foto wajib di Storage.
+- Keputusan lewat `review_store_verification`, yang hanya menerima akun di
+  tabel `admins`, hanya untuk pengajuan yang masih menunggu, dan mencatat
+  setiap keputusan di `verification_reviews`.
+- Foto hanya bisa dibaca pemiliknya dan admin, dan tidak bisa ditukar setelah
+  diajukan atau disetujui.
+- Teks persetujuan yang disetujui dicatat versinya (`identity_consent_version`).
+- Salinan foto di HP dihapus begitu layar unggah ditutup.
 
-Perlu disebut jujur: untuk rilis publik ini tetap bukan rancangan terbaik. Kunci
-di perangkat yang sudah di-*root* masih dapat digali. Jalur produksi yang benar
-adalah *proxy* backend yang memegang kunci, sehingga aplikasi hanya memanggil
-endpoint milik sendiri. Untuk keperluan demonstrasi dan penelitian, pendekatan
-saat ini memadai karena kunci yang dipakai adalah milik pengguna sendiri.
+### 7.5 Kunci API di server
+
+Bantuan AI lewat Edge Function `parse-transaction`. Kunci Anthropic hanya ada
+sebagai *secret* di Supabase; aplikasi tidak pernah memegangnya. Fungsi itu:
+
+- hanya menerima **transkrip** (maks. 500 karakter), bukan permintaan bebas ke
+  model, jadi tidak bisa disalahgunakan sebagai *proxy* umum;
+- mewajibkan JWT pengguna yang login;
+- membatasi pemakaian per akun per hari (`consume_llm_quota`, bawaan 200);
+- memegang prompt dan skema keluaran, sehingga perbaikan prompt tidak perlu
+  rilis aplikasi baru.
+
+Model yang dipakai `claude-opus-5-5` dengan *effort* rendah dan keluaran
+terstruktur (`json_schema`), plus `fallbacks: "default"` agar permintaan
+yang ditolak pengaman model dicoba ulang otomatis di model lain.
 
 ### 7.6 Keyakinan hasil LLM dibatasi
 
@@ -288,29 +324,47 @@ menyesatkan pengguna.
 
 ---
 
-## 8. Sinkronisasi
+## 8. Cadangan Cloud
 
-- **Antrean terpisah** (`pending_sync`) ditulis dalam transaksi basis data yang
-  sama dengan entitasnya, sehingga tidak mungkin ada transaksi tersimpan tanpa
-  antrean, atau sebaliknya.
-- ***Backoff* eksponensial**: `min(5 detik × 2^percobaan, 6 jam)` dengan *jitter*
-  ±20%. Jitter diperlukan agar perangkat yang gagal bersamaan tidak mencoba
-  ulang serentak dan menghantam server pada saat yang sama.
-- **Setelah 10 percobaan**, baris ditandai `failed_permanent` dan **ditampilkan
-  di antarmuka dengan tombol coba-lagi** — tidak pernah dibuang diam-diam.
-  Kegagalan yang disembunyikan adalah kehilangan data yang tidak disadari.
-- **Sakelar diperiksa saat pengiriman**, bukan hanya saat mengantre. Mematikan
-  sinkronisasi langsung menghentikan pengiriman, termasuk untuk baris yang
-  terlanjur mengantre.
-- **Tujuan sinkronisasi berupa antarmuka** (`RemoteSyncTarget`). Firestore belum
-  dipasang; seluruh alur antrean sudah dapat diuji tanpa akun cloud, dan
-  menambahkan Firestore kelak cukup dengan satu implementasi baru.
+Rancangan awal memakai antrean sinkron per transaksi. Rancangan itu diganti
+**cadangan utuh per toko** karena dua alasan:
+
+1. **Pemulihan harus lengkap.** Antrean per transaksi hanya mencakup
+   transaksi; barang, stok, dan kontak tertinggal. Pemilik yang ganti HP butuh
+   *semuanya* kembali dalam keadaan konsisten.
+2. **Lebih sedikit yang bisa salah.** Tidak ada urutan kiriman, konflik, atau
+   baris yatim di server. Satu berkas, satu transaksi basis data saat
+   dipulihkan.
+
+Cara kerjanya:
+
+- Isi toko (lima tabel) dibentuk menjadi JSON, disaring `SyncPayloadBuilder`,
+  dikompres gzip, lalu diunggah ke `backups/{uid}/{storeId}.json.gz`.
+- Cadangan otomatis hanya berjalan bila sakelarnya menyala, dan hanya bila
+  **sidik data** (jumlah baris, waktu ubah terakhir, total) berubah sejak
+  cadangan terakhir. Saat aplikasi dibuka ulang ada jeda minimum 10 menit;
+  saat aplikasi ditinggalkan, cadangan langsung dibuat bila ada perubahan.
+- Toko yang masih kosong dan belum pernah dicadangkan **tidak pernah**
+  mengunggah, supaya HP baru tidak menimpa cadangan lama sebelum sempat
+  dipulihkan. Layar utama menawarkan pemulihan dalam keadaan itu.
+- Pemulihan menolak berkas dari toko lain, berkas rusak, dan cadangan dari
+  versi skema yang lebih baru dari aplikasi.
+
+**Yang dikorbankan.** Setiap cadangan mengunggah seluruh isi toko, bukan
+selisihnya. Untuk skala warung (puluhan ribu baris per tahun, sekitar 1 MB
+setelah dikompres) ini murah, tetapi tidak cocok untuk toko yang sangat besar.
+Field identitas (`recorded_by`) tidak ikut cadangan, jadi keterangan "dicatat
+oleh" kosong untuk transaksi hasil pemulihan.
+
+Profil toko punya salinan lokal (`StoreCache`). Aplikasi menampilkan salinan
+itu lebih dulu lalu menggantinya dengan data server, sehingga tetap bisa
+dibuka dan dipakai mencatat saat luring.
 
 Catatan teknis: `connectivity_plus` melaporkan ada-tidaknya antarmuka jaringan,
 bukan keterjangkauan internet. WiFi warung yang terhubung tetapi tagihannya belum
 dibayar tetap dilaporkan "online". Status tersebut karena itu hanya dipakai untuk
 memutuskan apakah **layak mencoba**; kepastian datang dari hasil percobaannya
-sendiri.
+sendiri, dan cadangan yang gagal cukup dicoba lagi pada kesempatan berikutnya.
 
 ---
 
@@ -329,8 +383,11 @@ Dokumen ini akan kehilangan gunanya kalau hanya memuat klaim keberhasilan.
 3. **Parser belum diuji dengan rekaman nyata di lingkungan bising.** Korpus saat
    ini berisi kalimat yang disusun manual. Pengujian lapangan diperlukan sebelum
    klaim akurasi apa pun dibuat.
-4. **Penangkapan notifikasi QRIS belum diimplementasikan** — baru dirancang.
-5. **Keyakinan gabungan (`STT × aturan`) adalah heuristik**, bukan probabilitas
+4. **Penangkapan notifikasi QRIS belum diimplementasikan** — baru dirancang
+   (§10). Menu yang belum berfungsi sengaja tidak ditampilkan di aplikasi.
+5. **Login nomor HP belum tersedia.** Butuh penyedia SMS berbayar di Supabase;
+   autentikasi saat ini email + kata sandi dengan kode OTP lewat email.
+6. **Keyakinan gabungan (`STT × aturan`) adalah heuristik**, bukan probabilitas
    terkalibrasi. Ambang 0,80 dan 0,50 ditetapkan berdasarkan pertimbangan, dan
    perlu ditala ulang setelah ada data pemakaian nyata.
 
@@ -363,13 +420,21 @@ aplikasi.
 |---|---|
 | `test/voice_parser/indonesian_number_test.dart` | Ketepatan pembacaan angka |
 | `test/voice_parser/rule_parser_corpus_test.dart` | Korpus regresi parser |
-| `test/sync/backoff_test.dart` | Kurva *backoff*, batas atas, jitter, luapan |
+| `test/voice_parser/cloud_llm_parser_test.dart` | Pemetaan hasil AI, batas keyakinan, kegagalan tidak melempar |
 | `test/sync/payload_redaction_test.dart` | Data identitas tidak pernah lolos |
-| `test/db/transaction_repository_test.dart` | Atomisitas, sifat gagal-tertutup, gerbang konfirmasi |
+| `test/backup/backup_service_test.dart` | Sakelar cadangan, tidak menimpa cadangan lama, pemulihan utuh |
+| `test/stores/store_cache_test.dart` | Toko tetap terbuka saat luring, transaksi tidak ikut terhapus |
+| `test/db/transaction_repository_test.dart` | Atomisitas, gerbang konfirmasi |
+| `test/db/catalog_stock_test.dart` | Katalog, stok, migrasi dari v1 |
+| `test/auth/reset_password_test.dart` | Alur kode reset kata sandi |
 | `test/widget_test.dart` | Tombol simpan mati sebelum lengkap, sorotan keyakinan |
 
-Tiga di antaranya bukan sekadar pengujian fungsional melainkan **penjaga
-janji**: redaksi payload, sifat gagal-tertutup, dan gerbang konfirmasi. Bila
+Keamanan server (hak kolom, policy, fungsi admin) ada di `supabase/setup.sql`
+dan diuji manual sesuai daftar di README, karena butuh project Supabase
+sungguhan.
+
+Beberapa di antaranya bukan sekadar pengujian fungsional melainkan **penjaga
+janji**: redaksi payload, cadangan yang gagal-tertutup, dan gerbang konfirmasi. Bila
 salah satu gagal, yang rusak bukan fiturnya melainkan komitmen produknya.
 
 ---
@@ -377,7 +442,7 @@ salah satu gagal, yang rusak bukan fiturnya melainkan komitmen produknya.
 ## 12. Langkah Berikutnya
 
 1. Uji parser dengan rekaman nyata di warung, lalu tala ulang ambang keyakinan.
-2. Implementasi unggah KTP terenkripsi beserta layar persetujuannya.
-3. Implementasi `NotificationListenerService` untuk QRIS sesuai rancangan di §10.
-4. Implementasi `RemoteSyncTarget` berbasis Firestore.
-5. Pindahkan pemanggilan LLM ke *proxy* backend bila aplikasi dirilis publik.
+2. Implementasi `NotificationListenerService` untuk QRIS sesuai rancangan di §10.
+3. Login nomor HP setelah penyedia SMS dipilih.
+4. Enkripsi isi cadangan di sisi klien bila dibutuhkan jaminan bahwa operator
+   server pun tidak bisa membacanya.

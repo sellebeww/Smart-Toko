@@ -72,6 +72,10 @@ final RegExp _digitPattern = RegExp(r'^\d+(?:\.\d+)?$');
 String normalizeNumericText(String input) {
   var s = input.toLowerCase();
 
+  // Nominal ketik sering menempel pada simbol mata uang. Pisahkan sebelum
+  // normalisasi ribuan agar batas kata pada "Rp200.000" tetap dikenali.
+  s = s.replaceAll(RegExp(r'\brp\.?\s*(?=\d)'), '');
+
   // Pemisah ribuan gaya Indonesia: 25.000 / 1.250.000 -> 25000 / 1250000.
   s = s.replaceAllMapped(
     RegExp(r'\b(\d{1,3})((?:\.\d{3})+)\b'),

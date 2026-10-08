@@ -18,29 +18,50 @@ import '../../auth/auth_providers.dart';
 import '../data/verification_repository.dart';
 
 enum _Slot {
-  ktp('KTP pemilik', required: true, cameraOnly: false),
-  storePhoto('Foto toko dari luar', required: true, cameraOnly: false),
+  ktp(
+    'KTP pemilik',
+    VerificationDocument.ktp,
+    required: true,
+    cameraOnly: false,
+  ),
+  storePhoto(
+    'Foto toko dari luar',
+    VerificationDocument.storePhoto,
+    required: true,
+    cameraOnly: false,
+  ),
   // Kamera saja: selfie harus diambil saat itu juga, bukan foto lama.
-  selfie('Selfie sambil pegang KTP', required: true, cameraOnly: true),
-  nib('NIB / izin usaha', required: false, cameraOnly: false);
+  selfie(
+    'Selfie sambil pegang KTP',
+    VerificationDocument.selfie,
+    required: true,
+    cameraOnly: true,
+  ),
+  nib(
+    'NIB / izin usaha',
+    VerificationDocument.nib,
+    required: false,
+    cameraOnly: false,
+  );
 
   final String title;
+  final VerificationDocument document;
   final bool required;
   final bool cameraOnly;
 
-  const _Slot(this.title, {required this.required, required this.cameraOnly});
+  const _Slot(
+    this.title,
+    this.document, {
+    required this.required,
+    required this.cameraOnly,
+  });
 
   Future<void> upload(
     VerificationRepository repo,
     String ownerUid,
     String storeId,
     File file,
-  ) => switch (this) {
-    _Slot.ktp => repo.uploadKtp(ownerUid, storeId, file),
-    _Slot.storePhoto => repo.uploadStorePhoto(ownerUid, storeId, file),
-    _Slot.selfie => repo.uploadSelfie(ownerUid, storeId, file),
-    _Slot.nib => repo.uploadNib(ownerUid, storeId, file),
-  };
+  ) => repo.upload(ownerUid, storeId, document, file);
 }
 
 class UploadScreen extends ConsumerStatefulWidget {
@@ -213,7 +234,12 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
         const SnackBar(content: Text('Pengajuan verifikasi terkirim')),
       );
     } catch (e) {
-      if (mounted) setState(() => _errorText = 'Gagal mengunggah, coba lagi');
+      if (mounted) {
+        setState(
+          () => _errorText =
+              'Gagal mengirim pengajuan. Periksa koneksi lalu coba lagi.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

@@ -170,6 +170,7 @@ class TransactionDraft {
   factory TransactionDraft.fromParseResult(
     ParseResult result, {
     DateTime? occurredAt,
+    TxSource source = TxSource.voice,
   }) => TransactionDraft(
     direction: DraftField.fromParsed(result.direction),
     category: DraftField.fromParsed(result.category),
@@ -186,7 +187,7 @@ class TransactionDraft {
               ),
           ],
     occurredAt: occurredAt ?? DateTime.now(),
-    source: TxSource.voice,
+    source: source,
     transcript: result.transcript,
   );
 

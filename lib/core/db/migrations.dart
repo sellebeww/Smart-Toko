@@ -7,7 +7,7 @@ library;
 
 import 'package:sqflite/sqflite.dart';
 
-const int schemaVersion = 3;
+const int schemaVersion = 4;
 
 class Migration {
   final int version;
@@ -190,4 +190,15 @@ const List<Migration> migrations = [
   // Siapa yang mencatat (email akun). Baris lama dibiarkan kosong: tidak
   // bisa dipastikan siapa yang dulu mencatatnya.
   Migration(3, ['ALTER TABLE transactions ADD COLUMN recorded_by TEXT']),
+  // Salinan profil toko dari server supaya aplikasi tetap bisa dibuka saat
+  // luring. Antrean sinkron per transaksi diganti cadangan utuh per toko,
+  // jadi tabelnya dibuang.
+  Migration(4, [
+    'ALTER TABLE stores ADD COLUMN owner_uid TEXT',
+    'ALTER TABLE stores ADD COLUMN category TEXT',
+    'ALTER TABLE stores ADD COLUMN address TEXT',
+    'ALTER TABLE stores ADD COLUMN rejection_reason TEXT',
+    'CREATE INDEX idx_stores_owner ON stores(owner_uid)',
+    'DROP TABLE IF EXISTS pending_sync',
+  ]),
 ];

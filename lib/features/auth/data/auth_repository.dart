@@ -52,8 +52,43 @@ class AuthRepository {
 
   Future<void> signOut() => _client.auth.signOut();
 
+  /// Mengirim email berisi kode untuk membuat kata sandi baru. Template
+  /// email "Reset Password" di Supabase harus memuat `{{ .Token }}` (lihat
+  /// README).
   Future<void> sendPasswordReset(String email) =>
       _client.auth.resetPasswordForEmail(email.trim());
+
+  /// Memverifikasi kode dari email reset lalu langsung memasang kata sandi
+  /// baru. Verifikasi kode sekaligus membuat sesi, jadi pengguna langsung
+  /// masuk setelahnya.
+  Future<void> resetPasswordWithCode({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) async {
+    await _client.auth.verifyOTP(
+      email: email.trim(),
+      token: code.trim(),
+      type: OtpType.recovery,
+    );
+    await _client.auth.updateUser(UserAttributes(password: newPassword));
+  }
+
+  /// Konfirmasi email pendaftaran dengan kode dari email. Template "Confirm
+  /// signup" di Supabase harus memuat `{{ .Token }}`.
+  Future<void> verifySignupCode({
+    required String email,
+    required String code,
+  }) async {
+    await _client.auth.verifyOTP(
+      email: email.trim(),
+      token: code.trim(),
+      type: OtpType.email,
+    );
+  }
+
+  Future<void> resendSignupCode(String email) =>
+      _client.auth.resend(type: OtpType.signup, email: email.trim());
 
   AppUser? _toAppUser(User? user) {
     if (user == null) return null;

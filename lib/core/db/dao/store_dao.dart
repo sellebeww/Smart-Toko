@@ -93,7 +93,7 @@ class StoreDao {
   }
 
   /// Memastikan ada baris lokal dengan [id] ini, tanpa menimpa baris yang
-  /// sudah ada. Dipakai saat toko kanoniknya datang dari Firestore (multi-
+  /// sudah ada. Dipakai saat toko kanoniknya datang dari Supabase (multi-
   /// toko per akun) tapi `transactions.store_id` tetap butuh baris lokal yang
   /// valid karena FK-nya menunjuk ke tabel `stores` di sini.
   Future<void> ensureExists(String id, String name) async {

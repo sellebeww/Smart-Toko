@@ -1,14 +1,13 @@
 /// Perakitan dependensi aplikasi.
 ///
 /// Riverpod dipilih terutama karena banyak bagian aplikasi ini hidup di luar
-/// widget tree — callback STT, pekerja antrean, pemantau koneksi — dan semuanya
+/// widget tree — callback STT, pencadangan, pemantau koneksi — dan semuanya
 /// butuh akses dependensi tanpa BuildContext.
 library;
 
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/connectivity/connectivity_service.dart';
@@ -18,17 +17,17 @@ import '../core/db/dao/parse_failure_dao.dart';
 import '../core/db/dao/product_dao.dart';
 import '../core/db/dao/settings_dao.dart';
 import '../core/db/dao/store_dao.dart';
-import '../core/secure/secure_key_store.dart';
-import '../core/sync/remote_target.dart';
-import '../core/sync/sync_queue.dart';
+import '../core/supabase_config.dart';
 import '../features/auth/data/auth_repository.dart';
 import '../features/auth/auth_providers.dart';
+import '../features/backup/backup_service.dart';
+import '../features/stores/data/store_cache.dart';
 import '../features/stores/data/store_repository.dart';
 import '../features/transactions/data/transaction_repository.dart';
 import '../features/verification/data/verification_repository.dart';
 import '../features/voice_capture/engines/speech_to_text_service.dart';
 import '../features/voice_capture/speech_service.dart';
-import '../features/voice_parser/llm/claude_llm_parser.dart';
+import '../features/voice_parser/llm/cloud_llm_parser.dart';
 import '../features/voice_parser/llm/llm_parser.dart';
 import '../features/voice_parser/logging/parse_failure_logger.dart';
 import '../features/voice_parser/parser_pipeline.dart';
@@ -83,6 +82,10 @@ final productDaoProvider = Provider<ProductDao>(
   (ref) => ProductDao(ref.watch(appDatabaseProvider).db),
 );
 
+final storeCacheProvider = Provider<StoreCache>(
+  (ref) => StoreCache(ref.watch(appDatabaseProvider).db),
+);
+
 final contactDaoProvider = Provider<ContactDao>(
   (ref) => ContactDao(ref.watch(appDatabaseProvider).db),
 );
@@ -105,7 +108,9 @@ final connectivityProvider = Provider<ConnectivityService>(
   (ref) => ConnectivityPlusService(),
 );
 
-final keyStoreProvider = Provider<KeyStore>((ref) => SecureKeyStore());
+final connectivityStatusProvider = StreamProvider<bool>(
+  (ref) => ref.watch(connectivityProvider).onStatusChange,
+);
 
 /// Satu client menyediakan Auth, Postgres (lewat `.from(...)`), dan Storage.
 final supabaseClientProvider = Provider<SupabaseClient>(
@@ -124,27 +129,19 @@ final verificationRepositoryProvider = Provider<VerificationRepository>(
   (ref) => VerificationRepository(ref.watch(supabaseClientProvider)),
 );
 
-final httpClientProvider = Provider<http.Client>((ref) {
-  final client = http.Client();
-  ref.onDispose(client.close);
-  return client;
-});
-
 final parseFailureLoggerProvider = Provider<ParseFailureLogger>(
   (ref) => ParseFailureDao(ref.watch(appDatabaseProvider).db),
 );
 
 final llmParserProvider = Provider<LlmParser>((ref) {
   final settings = ref.watch(settingsDaoProvider);
-  final keyStore = ref.watch(keyStoreProvider);
 
   return GatedLlmParser(
     isEnabled: () async =>
-        await settings.llmEnabled() && await keyStore.hasLlmApiKey(),
-    disabledReason: 'Bantuan AI mati atau kunci API belum diisi',
-    delegate: ClaudeLlmParser(
-      apiKeyProvider: keyStore.readLlmApiKey,
-      httpClient: ref.watch(httpClientProvider),
+        SupabaseConfig.aiAssist && await settings.llmEnabled(),
+    disabledReason: 'Bantuan AI dimatikan',
+    delegate: CloudLlmParser(
+      invoke: supabaseLlmInvoker(ref.watch(supabaseClientProvider)),
     ),
   );
 });
@@ -166,14 +163,13 @@ final transactionRepositoryProvider = Provider<TransactionRepository>(
   (ref) => TransactionRepository(database: ref.watch(appDatabaseProvider)),
 );
 
-final remoteSyncTargetProvider = Provider<RemoteSyncTarget>(
-  // Target simulasi hanya untuk pengujian, tidak boleh mengakui kiriman nyata.
-  (ref) => const UnconfiguredRemoteSyncTarget(),
+final backupStorageProvider = Provider<BackupStorage>(
+  (ref) => SupabaseBackupStorage(ref.watch(supabaseClientProvider)),
 );
 
-final syncQueueProvider = Provider<SyncQueue>(
-  (ref) => SyncQueue(
+final backupServiceProvider = Provider<BackupService>(
+  (ref) => BackupService(
     database: ref.watch(appDatabaseProvider),
-    target: ref.watch(remoteSyncTargetProvider),
+    storage: ref.watch(backupStorageProvider),
   ),
 );

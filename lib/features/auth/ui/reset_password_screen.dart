@@ -1,8 +1,14 @@
+/// Lupa kata sandi: kirim kode ke email, lalu buat kata sandi baru dengan
+/// kode itu langsung di aplikasi. Tidak memakai tautan, jadi tidak
+/// bergantung pada deep link atau halaman web terpisah.
+library;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../app/providers.dart';
+import 'auth_messages.dart';
 
 class ResetPasswordScreen extends ConsumerStatefulWidget {
   final String initialEmail;
@@ -15,50 +21,96 @@ class ResetPasswordScreen extends ConsumerStatefulWidget {
 }
 
 class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
-  final _formKey = GlobalKey<FormState>();
+  final _emailFormKey = GlobalKey<FormState>();
+  final _codeFormKey = GlobalKey<FormState>();
   late final _email = TextEditingController(text: widget.initialEmail);
-  bool _sending = false;
+  final _code = TextEditingController();
+  final _password = TextEditingController();
+  final _confirm = TextEditingController();
+  bool _busy = false;
   bool _sent = false;
+  bool _obscure = true;
   String? _error;
 
   @override
   void dispose() {
     _email.dispose();
+    _code.dispose();
+    _password.dispose();
+    _confirm.dispose();
     super.dispose();
   }
 
-  Future<void> _send() async {
-    if (_sending || !_formKey.currentState!.validate()) return;
+  Future<void> _guard(Future<void> Function() action) async {
     setState(() {
-      _sending = true;
+      _busy = true;
       _error = null;
     });
     try {
-      await ref.read(authRepositoryProvider).sendPasswordReset(_email.text);
-      // Supabase sendiri sudah menjaga kerahasiaan apakah email terdaftar:
-      // responsnya sama saja baik email ada atau tidak.
-      if (mounted) setState(() => _sent = true);
+      await action();
     } on AuthException catch (e) {
-      if (!mounted) return;
-      setState(
-        () => _error = switch (e.code) {
-          'validation_failed' ||
-          'email_address_invalid' => 'Masukkan email yang valid.',
-          'over_email_send_rate_limit' || 'over_request_rate_limit' =>
-            'Terlalu banyak percobaan. Coba lagi nanti.',
-          _ when e.statusCode == null =>
-            'Periksa koneksi internet, lalu coba lagi.',
-          _ => 'Belum bisa mengirim tautan. Silakan coba lagi.',
-        },
-      );
+      if (mounted) setState(() => _error = authErrorMessage(e));
     } catch (_) {
       if (mounted) {
         setState(() => _error = 'Terjadi gangguan. Silakan coba lagi.');
       }
     } finally {
-      if (mounted) setState(() => _sending = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
+
+  Future<void> _send() async {
+    if (_busy || !_emailFormKey.currentState!.validate()) return;
+    await _request();
+  }
+
+  Future<void> _resend() async {
+    if (_busy) return;
+    await _request();
+    if (mounted && _error == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Kode baru dikirim')));
+    }
+  }
+
+  Future<void> _request() async {
+    await _guard(() async {
+      await ref.read(authRepositoryProvider).sendPasswordReset(_email.text);
+      // Supabase sendiri sudah menjaga kerahasiaan apakah email terdaftar:
+      // responsnya sama saja baik email ada atau tidak.
+      if (mounted) setState(() => _sent = true);
+    });
+  }
+
+  Future<void> _reset() async {
+    if (_busy || !_codeFormKey.currentState!.validate()) return;
+    final repository = ref.read(authRepositoryProvider);
+    // Begitu kode terverifikasi, sesi aktif dan gerbang login membuka layar
+    // utama — layar ini ikut tertutup dengan sendirinya.
+    await _guard(
+      () => repository.resetPasswordWithCode(
+        email: _email.text,
+        code: _code.text,
+        newPassword: _password.text,
+      ),
+    );
+  }
+
+  Widget _errorText(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 16),
+    child: Text(
+      _error!,
+      style: TextStyle(color: Theme.of(context).colorScheme.error),
+    ),
+  );
+
+  Widget _progress(String label) => _busy
+      ? const SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        )
+      : Text(label);
 
   @override
   Widget build(BuildContext context) {
@@ -67,69 +119,117 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Icon(
-                  _sent ? Icons.mark_email_read_outlined : Icons.lock_reset,
-                  size: 56,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  _sent
-                      ? 'Jika email ini terdaftar, tautan pengaturan ulang akan dikirim. Periksa kotak masuk dan folder spam.'
-                      : 'Masukkan email akunmu. Kami akan mengirim tautan untuk membuat kata sandi baru.',
-                ),
-                const SizedBox(height: 24),
-                if (!_sent) ...[
-                  TextFormField(
-                    controller: _email,
-                    enabled: !_sending,
-                    keyboardType: TextInputType.emailAddress,
-                    autofillHints: const [AutofillHints.email],
-                    autocorrect: false,
-                    textInputAction: TextInputAction.done,
-                    onFieldSubmitted: (_) => _send(),
-                    decoration: const InputDecoration(labelText: 'Email'),
-                    validator: (value) =>
-                        RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
-                            .hasMatch(value?.trim() ?? '')
-                        ? null
-                        : 'Masukkan email yang valid',
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 16),
-                    Text(
-                      _error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: _sending ? null : _send,
-                    child: _sending
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Kirim tautan'),
-                  ),
-                ] else
-                  FilledButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Kembali ke masuk'),
-                  ),
-              ],
-            ),
-          ),
+          child: _sent ? _codeStep(context) : _emailStep(context),
         ),
       ),
     );
   }
+
+  Widget _emailStep(BuildContext context) => Form(
+    key: _emailFormKey,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Icon(
+          Icons.lock_reset,
+          size: 56,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          'Masukkan email akunmu. Kami akan mengirim kode untuk membuat kata sandi baru.',
+        ),
+        const SizedBox(height: 24),
+        TextFormField(
+          controller: _email,
+          enabled: !_busy,
+          keyboardType: TextInputType.emailAddress,
+          autofillHints: const [AutofillHints.email],
+          autocorrect: false,
+          textInputAction: TextInputAction.done,
+          onFieldSubmitted: (_) => _send(),
+          decoration: const InputDecoration(labelText: 'Email'),
+          validator: validateEmail,
+        ),
+        if (_error != null) _errorText(context),
+        const SizedBox(height: 24),
+        FilledButton(
+          onPressed: _busy ? null : _send,
+          child: _progress('Kirim kode'),
+        ),
+      ],
+    ),
+  );
+
+  Widget _codeStep(BuildContext context) => Form(
+    key: _codeFormKey,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Icon(
+          Icons.mark_email_read_outlined,
+          size: 56,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+        const SizedBox(height: 24),
+        Text(
+          'Jika ${_email.text.trim()} terdaftar, kode akan dikirim ke sana. '
+          'Periksa kotak masuk dan folder spam, lalu masukkan kodenya di bawah.',
+        ),
+        const SizedBox(height: 24),
+        TextFormField(
+          controller: _code,
+          enabled: !_busy,
+          keyboardType: TextInputType.number,
+          autofillHints: const [AutofillHints.oneTimeCode],
+          decoration: const InputDecoration(labelText: 'Kode dari email'),
+          validator: validateOtp,
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _password,
+          enabled: !_busy,
+          obscureText: _obscure,
+          autofillHints: const [AutofillHints.newPassword],
+          decoration: InputDecoration(
+            labelText: 'Kata sandi baru',
+            suffixIcon: IconButton(
+              tooltip: _obscure
+                  ? 'Tampilkan kata sandi'
+                  : 'Sembunyikan kata sandi',
+              onPressed: () => setState(() => _obscure = !_obscure),
+              icon: Icon(
+                _obscure
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+              ),
+            ),
+          ),
+          validator: validateNewPassword,
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _confirm,
+          enabled: !_busy,
+          obscureText: _obscure,
+          decoration: const InputDecoration(
+            labelText: 'Ulangi kata sandi baru',
+          ),
+          validator: (value) =>
+              value != _password.text ? 'Kata sandi tidak sama' : null,
+        ),
+        if (_error != null) _errorText(context),
+        const SizedBox(height: 24),
+        FilledButton(
+          onPressed: _busy ? null : _reset,
+          child: _progress('Simpan kata sandi baru'),
+        ),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: _busy ? null : _resend,
+          child: const Text('Kirim ulang kode'),
+        ),
+      ],
+    ),
+  );
 }

@@ -6,6 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../app/providers.dart';
+import '../../../core/ui/brand.dart';
+import 'auth_messages.dart';
+import 'verify_email_screen.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -45,7 +48,17 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             password: _passwordController.text,
           );
     } on AuthException catch (e) {
-      if (mounted) setState(() => _errorText = _messageFor(e));
+      if (!mounted) return;
+      if (e.code == 'email_confirmation_required') {
+        await Navigator.of(context).pushReplacement(
+          MaterialPageRoute<void>(
+            builder: (_) =>
+                VerifyEmailScreen(email: _emailController.text.trim()),
+          ),
+        );
+        return;
+      }
+      setState(() => _errorText = authErrorMessage(e));
     } catch (_) {
       if (mounted) {
         setState(() => _errorText = 'Terjadi gangguan. Silakan coba lagi.');
@@ -70,6 +83,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [
+                const BrandHeader(),
+                const SizedBox(height: 28),
+                Text(
+                  'Langkah kecil, usaha lebih rapi.',
+                  style: theme.textTheme.headlineMedium,
+                ),
+                const SizedBox(height: 8),
+                const Text('Buat akun untuk mulai mengelola tokomu.'),
+                const SizedBox(height: 28),
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
@@ -77,12 +99,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   textInputAction: TextInputAction.next,
                   autocorrect: false,
                   decoration: const InputDecoration(labelText: 'Email'),
-                  validator: (value) =>
-                      (value == null ||
-                          !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
-                              .hasMatch(value.trim()))
-                      ? 'Masukkan email yang valid'
-                      : null,
+                  validator: validateEmail,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -104,9 +121,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       ),
                     ),
                   ),
-                  validator: (value) => (value == null || value.length < 6)
-                      ? 'Minimal 6 karakter'
-                      : null,
+                  validator: validateNewPassword,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -143,27 +158,5 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         ),
       ),
     );
-  }
-
-  String _messageFor(AuthException e) {
-    switch (e.code) {
-      case 'email_confirmation_required':
-        return e.message;
-      case 'user_already_exists':
-        return 'Email sudah terdaftar';
-      case 'validation_failed':
-      case 'email_address_invalid':
-        return 'Format email tidak valid';
-      case 'weak_password':
-        return 'Kata sandi terlalu lemah';
-      case 'over_request_rate_limit':
-      case 'over_email_send_rate_limit':
-        return 'Terlalu banyak percobaan, coba lagi nanti';
-      default:
-        if (e.statusCode == null) {
-          return 'Gagal terhubung ke server, cek koneksi internet';
-        }
-        return e.message;
-    }
   }
 }

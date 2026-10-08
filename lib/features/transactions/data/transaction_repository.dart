@@ -14,39 +14,26 @@ import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/db/app_database.dart';
-import '../../../core/db/dao/pending_sync_dao.dart';
 import '../../../core/db/dao/product_dao.dart';
-import '../../../core/db/dao/settings_dao.dart';
-import '../../../core/sync/sync_payload_builder.dart';
 import '../../../core/transaction_kind.dart';
 import '../domain/confirmed_draft.dart';
 import '../domain/transaction_record.dart';
 
 class TransactionRepository {
   final AppDatabase database;
-  final SyncPayloadBuilder payloadBuilder;
   final Uuid uuid;
 
-  TransactionRepository({
-    required this.database,
-    this.payloadBuilder = const SyncPayloadBuilder(),
-    Uuid? uuid,
-  }) : uuid = uuid ?? const Uuid();
+  TransactionRepository({required this.database, Uuid? uuid})
+    : uuid = uuid ?? const Uuid();
 
   Future<TxRecord> save(
     ConfirmedDraft confirmed, {
     required String storeId,
     String? recordedBy,
-  }) async {
-    final syncEnabled = await SettingsDao(database.db).syncEnabled();
+  }) {
     return database.db.transaction(
-      (txn) => _insert(
-        txn,
-        confirmed,
-        storeId: storeId,
-        recordedBy: recordedBy,
-        syncEnabled: syncEnabled,
-      ),
+      (txn) =>
+          _insert(txn, confirmed, storeId: storeId, recordedBy: recordedBy),
     );
   }
 
@@ -58,17 +45,10 @@ class TransactionRepository {
     ConfirmedDraft confirmed, {
     required String storeId,
     String? recordedBy,
-  }) async {
-    final syncEnabled = await SettingsDao(database.db).syncEnabled();
+  }) {
     return database.db.transaction((txn) async {
       await txn.delete('transactions', where: 'id = ?', whereArgs: [oldId]);
-      return _insert(
-        txn,
-        confirmed,
-        storeId: storeId,
-        recordedBy: recordedBy,
-        syncEnabled: syncEnabled,
-      );
+      return _insert(txn, confirmed, storeId: storeId, recordedBy: recordedBy);
     });
   }
 
@@ -77,7 +57,6 @@ class TransactionRepository {
     ConfirmedDraft confirmed, {
     required String storeId,
     required String? recordedBy,
-    required bool syncEnabled,
   }) async {
     final draft = confirmed.draft;
     final now = DateTime.now();
@@ -153,23 +132,6 @@ class TransactionRepository {
           now: now,
         );
       }
-    }
-
-    if (syncEnabled) {
-      await PendingSyncDao(txn).enqueue(
-        id: uuid.v4(),
-        entityType: 'transaction',
-        entityId: record.id,
-        op: SyncOp.create,
-        // Transaksi tidak pernah membawa data identitas, jadi selalu
-        // disiapkan tanpa persetujuan identitas. Bila suatu saat ada field
-        // yang tanpa sengaja ikut, penyaring di builder yang membuangnya.
-        payload: payloadBuilder.buildTransaction(
-          record,
-          identityConsent: false,
-        ),
-        now: now,
-      );
     }
 
     return record;

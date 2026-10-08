@@ -20,7 +20,7 @@ class ContactsScreen extends StatelessWidget {
       child: Builder(
         builder: (context) => Scaffold(
           appBar: AppBar(
-            title: const Text('Pelanggan & Supplier'),
+            title: const Text('Relasi'),
             bottom: const TabBar(
               tabs: [
                 Tab(icon: Icon(Icons.people_outline), text: 'Pelanggan'),
@@ -150,28 +150,35 @@ class _ContactTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return ListTile(
-      leading: CircleAvatar(
-        child: Text(contact.name.characters.first.toUpperCase()),
-      ),
-      title: Text(contact.name),
-      subtitle: Text(
-        [
-          ?contact.location,
-          stats.transactionCount == 0
-              ? 'belum ada transaksi'
-              : '${stats.transactionCount}× transaksi',
-        ].join(' · '),
-      ),
-      trailing: stats.totalAmount == 0
-          ? null
-          : Text(
-              formatRupiah(stats.totalAmount),
-              style: theme.textTheme.titleSmall,
-            ),
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => ContactDetailScreen(contactId: contact.id),
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+      child: ListTile(
+        leading: CircleAvatar(
+          child: Text(
+            contact.name.isEmpty
+                ? '?'
+                : contact.name.characters.first.toUpperCase(),
+          ),
+        ),
+        title: Text(contact.name),
+        subtitle: Text(
+          [
+            ?contact.location,
+            stats.transactionCount == 0
+                ? 'belum ada transaksi'
+                : '${stats.transactionCount}× transaksi',
+          ].join(' · '),
+        ),
+        trailing: stats.totalAmount == 0
+            ? null
+            : Text(
+                formatRupiah(stats.totalAmount),
+                style: theme.textTheme.titleSmall,
+              ),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => ContactDetailScreen(contactId: contact.id),
+          ),
         ),
       ),
     );

@@ -11,9 +11,10 @@ import '../../contacts/contacts_providers.dart';
 import '../../export/export_service.dart';
 import '../domain/history_filter.dart';
 import '../history_providers.dart';
-import '../transactions_providers.dart';
 import 'transaction_detail_screen.dart';
 import 'transaction_tile.dart';
+import 'text_entry_sheet.dart';
+import 'transaction_editor.dart';
 
 class HistoryScreen extends ConsumerWidget {
   const HistoryScreen({super.key});
@@ -37,11 +38,10 @@ class HistoryScreen extends ConsumerWidget {
     final filter = ref.watch(historyFilterProvider);
     final transactions = ref.watch(historyTransactionsProvider);
     final contactNames = ref.watch(contactNamesProvider).value ?? const {};
-    final pending = ref.watch(pendingTxIdsProvider).value ?? const {};
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Riwayat Transaksi'),
+        title: const Text('Transaksi'),
         actions: [
           PopupMenuButton<bool>(
             tooltip: 'Export Excel',
@@ -63,6 +63,16 @@ class HistoryScreen extends ConsumerWidget {
             ],
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () async {
+          final draft = await showTextEntry(context);
+          if (draft != null && context.mounted) {
+            await showTransactionEditor(context, ref, draft: draft);
+          }
+        },
+        icon: const Icon(Icons.add),
+        label: const Text('Catat transaksi'),
       ),
       body: Column(
         children: [
@@ -101,7 +111,6 @@ class HistoryScreen extends ConsumerWidget {
                             contactName: r.contactId == null
                                 ? null
                                 : contactNames[r.contactId],
-                            pendingSync: pending.contains(r.id),
                             onTap: () => Navigator.of(context).push(
                               MaterialPageRoute<void>(
                                 builder: (_) => TransactionDetailScreen(
@@ -113,7 +122,7 @@ class HistoryScreen extends ConsumerWidget {
                         },
                       ),
                     ],
-                    const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                    const SliverToBoxAdapter(child: SizedBox(height: 96)),
                   ],
                 );
               },
