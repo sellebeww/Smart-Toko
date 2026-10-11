@@ -41,6 +41,64 @@ class ItemAggregate {
   });
 }
 
+/// Laba satu menu pada suatu periode.
+class MenuProfit {
+  final String? productId;
+  final String name;
+  final String? unit;
+  final int qty;
+  final int revenue;
+
+  /// Bagian [revenue] dari penjualan yang modalnya diketahui.
+  final int costedRevenue;
+  final int cost;
+
+  const MenuProfit({
+    required this.name,
+    required this.qty,
+    required this.revenue,
+    required this.costedRevenue,
+    required this.cost,
+    this.productId,
+    this.unit,
+  });
+
+  bool get hasCost => costedRevenue > 0;
+
+  /// Modal diketahui untuk semua penjualannya pada periode ini.
+  bool get fullyCosted => costedRevenue == revenue;
+
+  int? get profit => hasCost ? costedRevenue - cost : null;
+
+  int? get marginPercent {
+    final p = profit;
+    if (p == null || costedRevenue <= 0) return null;
+    return (p * 100 / costedRevenue).round();
+  }
+}
+
+/// Ringkasan laba kotor penjualan.
+class GrossProfit {
+  final List<MenuProfit> menus;
+
+  const GrossProfit(this.menus);
+
+  int get revenue => menus.fold(0, (s, m) => s + m.revenue);
+  int get costedRevenue => menus.fold(0, (s, m) => s + m.costedRevenue);
+  int get cost => menus.fold(0, (s, m) => s + m.cost);
+  int get profit => costedRevenue - cost;
+
+  /// Persentase omzet menu yang modalnya sudah diketahui.
+  int get coveragePercent =>
+      revenue == 0 ? 0 : (costedRevenue * 100 / revenue).round();
+
+  /// Menu terjual yang modalnya belum diisi.
+  List<MenuProfit> get missingCost => [
+    for (final m in menus)
+      if (!m.fullyCosted) m,
+  ];
+}
+
 class ReportRepository {
   final DatabaseExecutor db;
 
@@ -135,5 +193,47 @@ class ReportRepository {
           : (masuk: prev.masuk, keluar: prev.keluar + amount);
     }
     return result;
+  }
+
+  /// Laba kotor per menu: omzet dikurangi modal salinan saat terjual.
+  /// Diurutkan dari untung terbesar; menu tanpa modal di akhir.
+  Future<GrossProfit> grossProfit({
+    required String storeId,
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final rows = await db.rawQuery(
+      'SELECT i.product_id AS product_id, MIN(i.name) AS name, '
+      'MAX(i.unit) AS unit, SUM(i.qty) AS qty, SUM(i.line_total) AS revenue, '
+      'COALESCE(SUM(CASE WHEN i.unit_cost IS NOT NULL THEN i.line_total END), 0) '
+      'AS costed_revenue, '
+      'COALESCE(SUM(CASE WHEN i.unit_cost IS NOT NULL '
+      'THEN i.qty * i.unit_cost END), 0) AS cost '
+      'FROM transaction_items i JOIN transactions t ON t.id = i.transaction_id '
+      "WHERE t.store_id = ? AND t.category = 'penjualan' "
+      'AND t.occurred_at >= ? AND t.occurred_at < ? '
+      'GROUP BY COALESCE(i.product_id, LOWER(TRIM(i.name)))',
+      [storeId, from.millisecondsSinceEpoch, to.millisecondsSinceEpoch],
+    );
+    final menus =
+        [
+          for (final row in rows)
+            MenuProfit(
+              productId: row['product_id'] as String?,
+              name: row['name']! as String,
+              unit: row['unit'] as String?,
+              qty: (row['qty']! as num).toInt(),
+              revenue: (row['revenue']! as num).toInt(),
+              costedRevenue: (row['costed_revenue']! as num).toInt(),
+              cost: (row['cost']! as num).toInt(),
+            ),
+        ]..sort((a, b) {
+          final pa = a.profit, pb = b.profit;
+          if (pa == null && pb == null) return b.revenue.compareTo(a.revenue);
+          if (pa == null) return 1;
+          if (pb == null) return -1;
+          return pb.compareTo(pa);
+        });
+    return GrossProfit(menus);
   }
 }

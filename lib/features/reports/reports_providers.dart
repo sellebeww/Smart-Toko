@@ -24,6 +24,7 @@ class ReportData {
   final DateTime from;
   final DateTime to;
   final List<String> insights;
+  final GrossProfit grossProfit;
 
   const ReportData({
     required this.period,
@@ -36,6 +37,7 @@ class ReportData {
     required this.from,
     required this.to,
     required this.insights,
+    required this.grossProfit,
   });
 }
 
@@ -73,6 +75,11 @@ final reportProvider = FutureProvider.autoDispose
           ? const <DateTime, ({int masuk, int keluar})>{}
           : await repo.daily(storeId: storeId, from: r.from, to: r.to);
       final lowStock = await ref.watch(lowStockProvider.future);
+      final grossProfit = await repo.grossProfit(
+        storeId: storeId,
+        from: r.from,
+        to: r.to,
+      );
 
       return ReportData(
         period: period,
@@ -84,6 +91,7 @@ final reportProvider = FutureProvider.autoDispose
         daily: daily,
         from: r.from,
         to: r.to,
+        grossProfit: grossProfit,
         insights: buildInsights(
           period: period,
           current: current,

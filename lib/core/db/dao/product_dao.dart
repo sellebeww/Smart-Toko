@@ -37,6 +37,9 @@ class ProductRecord {
 
   /// Stok di bawah angka ini ditandai menipis. Null = tidak dipantau.
   final int? lowStockThreshold;
+
+  /// Modal per satuan (HPP) untuk menu. Null = belum diisi.
+  final int? costPrice;
   final bool archived;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -52,7 +55,24 @@ class ProductRecord {
     this.unit,
     this.defaultPrice,
     this.lowStockThreshold,
+    this.costPrice,
   });
+
+  /// Untung per satuan bila harga jual dan modal sama-sama diketahui.
+  int? get unitProfit {
+    final price = defaultPrice;
+    final cost = costPrice;
+    if (price == null || cost == null) return null;
+    return price - cost;
+  }
+
+  /// Margin dalam persen dari harga jual, dibulatkan.
+  int? get marginPercent {
+    final profit = unitProfit;
+    final price = defaultPrice;
+    if (profit == null || price == null || price <= 0) return null;
+    return (profit * 100 / price).round();
+  }
 
   factory ProductRecord.fromRow(Map<String, Object?> row) => ProductRecord(
     id: row['id']! as String,
@@ -62,6 +82,7 @@ class ProductRecord {
     unit: row['unit'] as String?,
     defaultPrice: (row['default_price'] as num?)?.toInt(),
     lowStockThreshold: (row['low_stock_threshold'] as num?)?.toInt(),
+    costPrice: (row['cost_price'] as num?)?.toInt(),
     archived: (row['archived']! as num) != 0,
     createdAt: DateTime.fromMillisecondsSinceEpoch(
       (row['created_at']! as num).toInt(),
@@ -130,6 +151,8 @@ class DuplicateProductNameException implements Exception {
   @override
   String toString() => 'Produk "$name" sudah ada';
 }
+
+const Object _keepCost = Object();
 
 class ProductDao {
   final DatabaseExecutor db;
@@ -242,6 +265,7 @@ class ProductDao {
     required int? defaultPrice,
     required int? lowStockThreshold,
     required DateTime now,
+    Object? costPrice = _keepCost,
   }) async {
     final key = nameKey(name);
     if (key != nameKey(product.name)) {
@@ -262,12 +286,25 @@ class ProductDao {
         'unit': (unit?.trim().isEmpty ?? true) ? null : unit!.trim(),
         'default_price': defaultPrice,
         'low_stock_threshold': lowStockThreshold,
+        if (!identical(costPrice, _keepCost)) 'cost_price': costPrice as int?,
         'updated_at': now.millisecondsSinceEpoch,
       },
       where: 'id = ?',
       whereArgs: [product.id],
     );
+    if (costPrice is int) await _backfillCost(product.id, costPrice);
   }
+
+  /// Penjualan lama yang belum punya modal ikut memakai modal baru, supaya
+  /// laporan laba langsung berguna setelah modal pertama kali diisi.
+  /// Penjualan yang sudah punya salinan modal tidak disentuh.
+  Future<int> _backfillCost(String productId, int cost) => db.rawUpdate(
+    'UPDATE transaction_items SET unit_cost = ? '
+    'WHERE product_id = ? AND unit_cost IS NULL '
+    'AND transaction_id IN '
+    "(SELECT id FROM transactions WHERE category = 'penjualan')",
+    [cost, productId],
+  );
 
   Future<void> setArchived(String id, {required bool archived}) async {
     await db.update(

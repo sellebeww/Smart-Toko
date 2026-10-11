@@ -7,7 +7,7 @@ library;
 
 import 'package:sqflite/sqflite.dart';
 
-const int schemaVersion = 6;
+const int schemaVersion = 7;
 
 class Migration {
   final int version;
@@ -224,5 +224,11 @@ const List<Migration> migrations = [
   Migration(6, [
     'ALTER TABLE transactions ADD COLUMN due_at INTEGER',
     'CREATE INDEX idx_transactions_due ON transactions(store_id, due_at)',
+  ]),
+  // Modal (HPP) per menu, dan salinannya pada tiap penjualan supaya laba
+  // masa lalu tidak ikut berubah saat modal diperbarui.
+  Migration(7, [
+    'ALTER TABLE products ADD COLUMN cost_price INTEGER',
+    'ALTER TABLE transaction_items ADD COLUMN unit_cost INTEGER',
   ]),
 ];

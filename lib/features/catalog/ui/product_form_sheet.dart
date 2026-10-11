@@ -40,6 +40,11 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
         ? ''
         : formatNumber(widget.existing!.defaultPrice!),
   );
+  late final _cost = TextEditingController(
+    text: widget.existing?.costPrice == null
+        ? ''
+        : formatNumber(widget.existing!.costPrice!),
+  );
   late final _threshold = TextEditingController(
     text: widget.existing?.lowStockThreshold?.toString() ?? '',
   );
@@ -53,6 +58,7 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
     _name.dispose();
     _unit.dispose();
     _price.dispose();
+    _cost.dispose();
     _threshold.dispose();
     super.dispose();
   }
@@ -100,6 +106,7 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
         defaultPrice: price,
         lowStockThreshold: _isBahan ? threshold : null,
         now: now,
+        costPrice: _isBahan ? product.costPrice : parseRupiahInput(_cost.text),
       );
       ref.read(dataRevisionProvider.notifier).bump();
       navigator.pop();
@@ -139,6 +146,21 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
         ),
       ),
     );
+  }
+
+  /// "Untung Rp6.000 per porsi (40%)" selagi mengetik.
+  String? _marginHint() {
+    final price = parseRupiahInput(_price.text);
+    final cost = parseRupiahInput(_cost.text);
+    if (cost == null) {
+      return 'Isi supaya laporan bisa menghitung laba per menu.';
+    }
+    if (price == null || price <= 0) return null;
+    final profit = price - cost;
+    final pct = (profit * 100 / price).round();
+    return profit < 0
+        ? 'Rugi ${formatRupiah(-profit)} per porsi. Cek lagi harga jualnya.'
+        : 'Untung ${formatRupiah(profit)} per porsi ($pct%).';
   }
 
   @override
@@ -194,6 +216,7 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
                   child: TextFormField(
                     controller: _price,
                     keyboardType: TextInputType.number,
+                    onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(
                       labelText: _isBahan ? 'Harga beli' : 'Harga jual',
                       prefixText: 'Rp',
@@ -203,6 +226,23 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
                 ),
               ],
             ),
+            if (!_isBahan) ...[
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _cost,
+                keyboardType: TextInputType.number,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  labelText:
+                      'Modal per ${_unit.text.trim().isEmpty ? 'porsi' : _unit.text.trim()} (opsional)',
+                  hintText: 'Biaya bahan + kemasan untuk satu porsi',
+                  prefixText: 'Rp',
+                  helperText: _marginHint(),
+                  helperMaxLines: 2,
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+            ],
             if (_isBahan) ...[
               const SizedBox(height: 12),
               TextFormField(

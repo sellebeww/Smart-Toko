@@ -98,6 +98,7 @@ class TransactionRepository {
       final name = item.name.value!.trim();
       final unitPrice = item.effectiveUnitPrice!;
       String? productId;
+      int? unitCost;
       if (productKind != null) {
         final product = await products.findOrCreate(
           storeId: storeId,
@@ -108,6 +109,7 @@ class TransactionRepository {
           now: now,
         );
         productId = product.id;
+        if (category == TxCategory.penjualan) unitCost = product.costPrice;
       }
       items.add(
         TxItemRecord(
@@ -119,6 +121,7 @@ class TransactionRepository {
           lineTotal: item.lineTotal!,
           unit: item.unit,
           productId: productId,
+          unitCost: unitCost,
         ),
       );
     }

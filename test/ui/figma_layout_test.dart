@@ -96,6 +96,16 @@ ReportData report(ReportPeriod period) => ReportData(
   from: DateTime(now.year, now.month, now.day),
   to: DateTime(now.year, now.month, now.day + 1),
   insights: const ['Ayam Geprek menjadi menu paling laku hari ini.'],
+  grossProfit: const GrossProfit([
+    MenuProfit(
+      name: 'Ayam Geprek',
+      unit: 'porsi',
+      qty: 12,
+      revenue: 180000,
+      costedRevenue: 180000,
+      cost: 108000,
+    ),
+  ]),
 );
 
 Future<void> pumpScreen(

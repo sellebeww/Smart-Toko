@@ -298,7 +298,13 @@ void main() {
       await deleteDatabase(path);
 
       // Naik langsung dari v1 ke versi terbaru melewati semua migrasi.
-      expect(schemaVersion, 6);
+      // Versi skema harus selalu menunjuk migrasi terakhir, berurutan tanpa
+      // celah.
+      expect(schemaVersion, migrations.last.version);
+      expect(
+        [for (final m in migrations) m.version],
+        [for (var v = 1; v <= schemaVersion; v++) v],
+      );
       expect(store.single['owner_uid'], isNull);
       expect(store.single.containsKey('address'), isTrue);
       expect(tables.map((t) => t['name']), isNot(contains('pending_sync')));

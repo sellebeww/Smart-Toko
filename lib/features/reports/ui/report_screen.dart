@@ -237,6 +237,17 @@ class _ReportBody extends StatelessWidget {
             ),
           ),
         _Section(
+          icon: Icons.savings_outlined,
+          title: 'Laba per menu',
+          trailing: TextButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const CatalogScreen()),
+            ),
+            child: const Text('Atur modal'),
+          ),
+          child: _GrossProfitView(profit: data.grossProfit),
+        ),
+        _Section(
           icon: Icons.restaurant_menu,
           title: 'Menu terlaris',
           child: _ItemList(
@@ -302,6 +313,87 @@ class _ReportBody extends StatelessWidget {
                 : 'Ekspor Excel (${data.period.label.toLowerCase()})',
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// Laba kotor = omzet menu − modal saat terjual. Hanya menu yang modalnya
+/// diisi yang dihitung; sisanya disebut terang-terangan.
+class _GrossProfitView extends StatelessWidget {
+  final GrossProfit profit;
+  const _GrossProfitView({required this.profit});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    if (profit.menus.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Text('Belum ada penjualan pada periode ini.'),
+      );
+    }
+    if (profit.costedRevenue == 0) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Text(
+          'Isi modal per porsi di daftar Menu supaya laba tiap menu bisa '
+          'dihitung. Cukup sekali; penjualan sebelumnya ikut terhitung.',
+        ),
+      );
+    }
+    final missing = profit.missingCost;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Text(
+            'Laba kotor ${formatRupiah(profit.profit)}',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: profit.profit < 0
+                  ? theme.colorScheme.error
+                  : theme.colorScheme.primary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
+          child: Text(
+            profit.coveragePercent >= 100
+                ? 'Omzet menu dikurangi modal saat terjual.'
+                : 'Dari ${profit.coveragePercent}% omzet yang modalnya '
+                      'diketahui.',
+            style: theme.textTheme.bodySmall,
+          ),
+        ),
+        for (final m in profit.menus.where((m) => m.hasCost).take(5))
+          ListTile(
+            dense: true,
+            title: Text(m.name),
+            subtitle: Text(
+              '${formatQty(m.qty, m.unit)} terjual · margin ${m.marginPercent}%',
+            ),
+            trailing: Text(
+              formatRupiah(m.profit!),
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: m.profit! < 0 ? theme.colorScheme.error : null,
+              ),
+            ),
+          ),
+        if (missing.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            child: Text(
+              'Modal belum diisi: '
+              '${missing.take(3).map((m) => m.name).join(', ')}'
+              '${missing.length > 3 ? ' dan ${missing.length - 3} lainnya' : ''}.',
+              style: theme.textTheme.bodySmall,
+            ),
+          )
+        else
+          const SizedBox(height: 8),
       ],
     );
   }

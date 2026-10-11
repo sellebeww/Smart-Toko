@@ -264,7 +264,7 @@ class _ProductList extends ConsumerWidget {
                             ),
                           ],
                         )
-                      else
+                      else ...[
                         Text(
                           p.defaultPrice == null
                               ? 'Harga belum diatur'
@@ -274,6 +274,22 @@ class _ProductList extends ConsumerWidget {
                             fontSize: 16,
                           ),
                         ),
+                        const SizedBox(height: 4),
+                        Text(
+                          p.costPrice == null
+                              ? 'Modal belum diisi'
+                              : p.unitProfit == null
+                              ? 'Modal ${formatRupiah(p.costPrice!)}'
+                              : 'Modal ${formatRupiah(p.costPrice!)} · untung '
+                                    '${formatRupiah(p.unitProfit!)} '
+                                    '(${p.marginPercent}%)',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: (p.unitProfit ?? 0) < 0
+                                ? theme.colorScheme.error
+                                : null,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

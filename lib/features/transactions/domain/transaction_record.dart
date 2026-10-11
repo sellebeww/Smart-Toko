@@ -17,6 +17,10 @@ class TxItemRecord {
   final String? unit;
   final String? productId;
 
+  /// Modal per satuan saat terjual (salinan dari katalog). Null bila modal
+  /// menunya belum diisi.
+  final int? unitCost;
+
   const TxItemRecord({
     required this.id,
     required this.transactionId,
@@ -26,6 +30,7 @@ class TxItemRecord {
     required this.lineTotal,
     this.unit,
     this.productId,
+    this.unitCost,
   });
 
   Map<String, Object?> toRow() => {
@@ -37,6 +42,7 @@ class TxItemRecord {
     'line_total': lineTotal,
     'unit': unit,
     'product_id': productId,
+    'unit_cost': unitCost,
   };
 
   factory TxItemRecord.fromRow(Map<String, Object?> row) => TxItemRecord(
@@ -48,6 +54,7 @@ class TxItemRecord {
     lineTotal: (row['line_total']! as num).toInt(),
     unit: row['unit'] as String?,
     productId: row['product_id'] as String?,
+    unitCost: (row['unit_cost'] as num?)?.toInt(),
   );
 }
 
