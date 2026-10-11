@@ -14,6 +14,14 @@ class SettingsKeys {
   static const String llmEnabled = 'llm_enabled';
   static const String errorReportsEnabled = 'error_reports_enabled';
 
+  /// Pengingat terjadwal. Waktu disimpan sebagai "HH:mm".
+  static const String reminderDaily = 'reminder_daily';
+  static const String reminderTime = 'reminder_time';
+  static const String reminderDue = 'reminder_due';
+
+  /// Tawaran menyalakan pengingat di beranda sudah dijawab.
+  static const String reminderOfferAnswered = 'reminder_offer_answered';
+
   /// Kunci PIN: hash + garam PIN, dan penghitung percobaan salah.
   static const String appLockHash = 'app_lock_hash';
   static const String appLockSalt = 'app_lock_salt';

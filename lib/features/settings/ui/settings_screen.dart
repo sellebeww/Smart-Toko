@@ -17,6 +17,7 @@ import '../../../core/supabase_config.dart';
 import '../../account/account_deletion_service.dart';
 import '../../app_lock/app_lock_controller.dart';
 import '../../app_lock/ui/pin_dialogs.dart';
+import '../../reminders/ui/reminder_settings_tiles.dart';
 import '../../auth/auth_providers.dart';
 import '../../backup/backup_actions.dart';
 import '../../backup/backup_providers.dart';
@@ -81,6 +82,9 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
             ],
+            const Divider(),
+            const _SectionHeader('Pengingat'),
+            const ReminderSettingsTiles(),
             const Divider(),
             const _SectionHeader('Keamanan'),
             const _AppLockTiles(),

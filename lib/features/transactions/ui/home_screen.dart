@@ -32,6 +32,7 @@ import '../../voice_capture/speech_service.dart';
 import '../../catalog/ui/catalog_screen.dart';
 import '../../debts/debts_providers.dart';
 import '../../debts/ui/debts_screen.dart';
+import '../../reminders/ui/reminder_settings_tiles.dart';
 import '../../contacts/contacts_providers.dart';
 import '../../contacts/ui/contacts_screen.dart';
 import '../../reports/reports_providers.dart';
@@ -218,6 +219,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   ),
                   SliverToBoxAdapter(child: _QuickAccess(enabled: !capturing)),
                   SliverToBoxAdapter(child: _DebtAlert(enabled: !capturing)),
+                  const SliverToBoxAdapter(child: ReminderOfferCard()),
                   SliverToBoxAdapter(
                     child: _LowStockAlert(enabled: !capturing),
                   ),
