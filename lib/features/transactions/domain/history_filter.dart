@@ -3,6 +3,7 @@ library;
 
 import '../../../core/format.dart';
 import '../../../core/transaction_kind.dart';
+import 'transaction_record.dart';
 
 enum HistoryRange {
   hariIni('Hari ini'),
@@ -25,12 +26,21 @@ class HistoryFilter {
   final Set<TxCategory> categories;
   final TxSource? source;
 
+  /// Kata kunci: dicocokkan dengan nama barang, catatan, kategori, dan nama
+  /// pelanggan/supplier. Kosong = tidak menyaring.
+  final String query;
+
+  /// Hanya transaksi kasbon yang belum lunas.
+  final bool onlyUnpaid;
+
   const HistoryFilter({
     this.range = HistoryRange.mingguIni,
     this.customFrom,
     this.customTo,
     this.categories = const {},
     this.source,
+    this.query = '',
+    this.onlyUnpaid = false,
   });
 
   /// Rentang [from, to) di zona waktu perangkat. Minggu dimulai Senin.
@@ -56,7 +66,11 @@ class HistoryFilter {
     };
   }
 
-  bool get isNarrowed => categories.isNotEmpty || source != null;
+  bool get isNarrowed =>
+      categories.isNotEmpty ||
+      source != null ||
+      query.trim().isNotEmpty ||
+      onlyUnpaid;
 
   HistoryFilter copyWith({
     HistoryRange? range,
@@ -64,13 +78,43 @@ class HistoryFilter {
     DateTime? customTo,
     Set<TxCategory>? categories,
     Object? source = _keep,
+    String? query,
+    bool? onlyUnpaid,
   }) => HistoryFilter(
     range: range ?? this.range,
     customFrom: customFrom ?? this.customFrom,
     customTo: customTo ?? this.customTo,
     categories: categories ?? this.categories,
     source: identical(source, _keep) ? this.source : source as TxSource?,
+    query: query ?? this.query,
+    onlyUnpaid: onlyUnpaid ?? this.onlyUnpaid,
   );
+
+  /// Menerapkan [query] dan [onlyUnpaid] pada [records]. Rentang tanggal,
+  /// kategori, dan sumber sudah disaring di basis data.
+  List<TxRecord> applyLocal(
+    List<TxRecord> records, {
+    Map<String, String> contactNames = const {},
+  }) {
+    final needle = query.trim().toLowerCase();
+    if (needle.isEmpty && !onlyUnpaid) return records;
+    return [
+      for (final r in records)
+        if ((!onlyUnpaid || r.isUnpaid) &&
+            (needle.isEmpty ||
+                recordMatchesQuery(r, needle, contactNames[r.contactId])))
+          r,
+    ];
+  }
+}
+
+/// [needle] sudah huruf kecil dan tidak kosong.
+bool recordMatchesQuery(TxRecord record, String needle, String? contactName) {
+  bool has(String? text) => text != null && text.toLowerCase().contains(needle);
+  return has(contactName) ||
+      has(record.note) ||
+      has(record.category.label) ||
+      record.items.any((item) => has(item.name));
 }
 
 const Object _keep = Object();

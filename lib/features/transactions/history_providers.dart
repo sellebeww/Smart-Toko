@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/providers.dart';
 import '../../core/format.dart';
 import '../../core/transaction_kind.dart';
+import '../contacts/contacts_providers.dart';
 import 'domain/history_filter.dart';
 import 'domain/transaction_record.dart';
 
@@ -33,7 +34,7 @@ final historyTransactionsProvider = FutureProvider.autoDispose<List<TxRecord>>((
   if (storeId == null) return const [];
   final filter = ref.watch(historyFilterProvider);
   final range = filter.resolve(DateTime.now());
-  return ref
+  final records = await ref
       .watch(transactionRepositoryProvider)
       .listBetween(
         storeId: storeId,
@@ -42,6 +43,10 @@ final historyTransactionsProvider = FutureProvider.autoDispose<List<TxRecord>>((
         categories: filter.categories,
         source: filter.source,
       );
+  final contactNames = filter.query.trim().isEmpty
+      ? const <String, String>{}
+      : await ref.watch(contactNamesProvider.future);
+  return filter.applyLocal(records, contactNames: contactNames);
 });
 
 class DayGroup {

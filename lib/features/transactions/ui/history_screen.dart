@@ -76,6 +76,7 @@ class HistoryScreen extends ConsumerWidget {
       ),
       body: Column(
         children: [
+          _SearchField(query: filter.query),
           _FilterBar(filter: filter),
           const Divider(height: 1),
           Expanded(
@@ -132,6 +133,68 @@ class HistoryScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Kolom cari. Teksnya milik widget ini (bukan di-rebuild dari filter),
+/// supaya kursor tidak melompat saat daftar dimuat ulang tiap ketikan.
+class _SearchField extends ConsumerStatefulWidget {
+  final String query;
+  const _SearchField({required this.query});
+
+  @override
+  ConsumerState<_SearchField> createState() => _SearchFieldState();
+}
+
+class _SearchFieldState extends ConsumerState<_SearchField> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.query,
+  );
+
+  @override
+  void didUpdateWidget(_SearchField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Filter direset dari luar (mis. ganti toko).
+    if (widget.query != _controller.text.trim() && widget.query.isEmpty) {
+      _controller.clear();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _apply(String value) {
+    final notifier = ref.read(historyFilterProvider.notifier);
+    notifier.set(ref.read(historyFilterProvider).copyWith(query: value));
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+    child: TextField(
+      controller: _controller,
+      onChanged: _apply,
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        hintText: 'Cari barang, catatan, atau nama',
+        prefixIcon: const Icon(Icons.search),
+        isDense: true,
+        suffixIcon: _controller.text.isEmpty
+            ? null
+            : IconButton(
+                tooltip: 'Hapus pencarian',
+                icon: const Icon(Icons.close),
+                onPressed: () {
+                  _controller.clear();
+                  _apply('');
+                  setState(() {});
+                },
+              ),
+      ),
+    ),
+  );
 }
 
 class _FilterBar extends ConsumerWidget {
@@ -214,6 +277,16 @@ class _FilterBar extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(
               children: [
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilterChip(
+                    avatar: const Icon(Icons.hourglass_bottom, size: 16),
+                    label: const Text('Belum lunas'),
+                    selected: filter.onlyUnpaid,
+                    onSelected: (on) =>
+                        notifier.set(filter.copyWith(onlyUnpaid: on)),
+                  ),
+                ),
                 for (final c in TxCategory.values)
                   Padding(
                     padding: const EdgeInsets.only(right: 8),

@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../app/providers.dart';
 import '../../../core/format.dart';
@@ -10,6 +11,8 @@ import '../../../core/transaction_kind.dart';
 import '../../contacts/contacts_providers.dart';
 import '../../debts/debts_providers.dart';
 import '../../debts/ui/payment_dialog.dart';
+import '../../stores/stores_providers.dart';
+import '../domain/receipt.dart';
 import '../domain/transaction_draft.dart';
 import '../domain/transaction_record.dart';
 import 'transaction_editor.dart';
@@ -41,6 +44,21 @@ class TransactionDetailScreen extends ConsumerWidget {
     // Koreksi menghasilkan id baru; detail lama sudah tidak ada.
     if (saved != null && context.mounted) Navigator.of(context).pop();
   }
+
+  Future<void> _shareReceipt(
+    WidgetRef ref,
+    TxRecord record,
+    String? contactName,
+  ) => SharePlus.instance.share(
+    ShareParams(
+      text: buildReceiptText(
+        record,
+        storeName: ref.read(activeStoreProvider).value?.name ?? 'SmartToko',
+        contactName: contactName,
+      ),
+      subject: 'Nota ${record.category.label}',
+    ),
+  );
 
   Future<void> _delete(
     BuildContext context,
@@ -102,6 +120,9 @@ class TransactionDetailScreen extends ConsumerWidget {
           return _DetailBody(
             record: record,
             contactName: contactName,
+            onShareReceipt: record.category == TxCategory.penjualan
+                ? () => _shareReceipt(ref, record, contactName)
+                : null,
             onCorrect: () => _correct(context, ref, record, contactName),
             onDelete: () => _delete(context, ref, record),
           );
@@ -117,9 +138,13 @@ class _DetailBody extends ConsumerWidget {
   final VoidCallback onCorrect;
   final VoidCallback onDelete;
 
+  /// Null untuk transaksi yang bukan penjualan (tidak ada yang dinotakan).
+  final VoidCallback? onShareReceipt;
+
   const _DetailBody({
     required this.record,
     required this.contactName,
+    required this.onShareReceipt,
     required this.onCorrect,
     required this.onDelete,
   });
@@ -210,6 +235,17 @@ class _DetailBody extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 24),
+        if (onShareReceipt != null) ...[
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onShareReceipt,
+              icon: const Icon(Icons.receipt_long_outlined),
+              label: const Text('Bagikan nota'),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         Row(
           children: [
             Expanded(
