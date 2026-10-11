@@ -101,14 +101,74 @@ grant update (name, category, address) on public.stores to authenticated;
 
 alter table public.stores enable row level security;
 
+-- Sinkronisasi antar-HP dinyalakan pemilik lewat set_store_sync(); klien
+-- tidak bisa mengubah kolom ini langsung (tidak ada hak kolomnya).
+alter table public.stores
+  add column if not exists sync_enabled boolean not null default false;
+
+-- Karyawan toko. Pemilik tidak dicatat di sini: pemilik = stores.owner_uid.
+create table if not exists public.store_members (
+  store_id uuid not null references public.stores (id) on delete cascade,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  role text not null default 'staff' check (role = 'staff'),
+  created_at timestamptz not null default now(),
+  primary key (store_id, user_id)
+);
+
+create index if not exists store_members_user_idx
+  on public.store_members (user_id);
+
+alter table public.store_members enable row level security;
+revoke all on public.store_members from anon, authenticated;
+
+create or replace function public.is_store_staff(p_store uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.store_members
+    where store_id = p_store and user_id = auth.uid()
+  );
+$$;
+
+revoke all on function public.is_store_staff(uuid) from public, anon;
+grant execute on function public.is_store_staff(uuid) to authenticated;
+
+-- 'owner', 'staff', atau null bila bukan siapa-siapa di toko itu.
+create or replace function public.store_role(p_store uuid)
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select case
+    when exists (
+      select 1 from public.stores where id = p_store and owner_uid = auth.uid()
+    ) then 'owner'
+    when public.is_store_staff(p_store) then 'staff'
+  end;
+$$;
+
+revoke all on function public.store_role(uuid) from public, anon;
+grant execute on function public.store_role(uuid) to authenticated;
+
 -- Policy versi lama.
 drop policy if exists "stores_select_any_authenticated" on public.stores;
 
 drop policy if exists "stores_select_own_or_admin" on public.stores;
-create policy "stores_select_own_or_admin"
+drop policy if exists "stores_select_member_or_admin" on public.stores;
+create policy "stores_select_member_or_admin"
   on public.stores for select
   to authenticated
-  using (owner_uid = auth.uid() or public.is_admin());
+  using (
+    owner_uid = auth.uid()
+    or public.is_store_staff(id)
+    or public.is_admin()
+  );
 
 drop policy if exists "stores_insert_own" on public.stores;
 create policy "stores_insert_own"
@@ -580,6 +640,458 @@ $$;
 
 revoke all on function public.delete_my_account() from public, anon;
 grant execute on function public.delete_my_account() to authenticated;
+
+-- =============================================================
+-- 10. Sinkronisasi antar-HP dan karyawan
+-- =============================================================
+-- Data toko (transaksi, barang, stok, kontak, kasbon) disimpan per baris
+-- sebagai JSON. Tiap perubahan mendapat nomor versi yang terus naik; HP
+-- menarik semua baris dengan versi di atas yang terakhir ia lihat.
+-- Klien tidak bisa membaca/menulis tabel ini langsung: hanya lewat
+-- sync_push / sync_pull, yang memeriksa peran pemanggil.
+
+create sequence if not exists public.sync_version_seq;
+
+create table if not exists public.sync_rows (
+  store_id uuid not null references public.stores (id) on delete cascade,
+  table_name text not null check (table_name in (
+    'products', 'contacts', 'transactions', 'transaction_items',
+    'stock_movements', 'debt_payments'
+  )),
+  row_id text not null,
+  data jsonb,
+  deleted boolean not null default false,
+  version bigint not null,
+  created_by uuid references auth.users (id) on delete set null,
+  updated_by uuid references auth.users (id) on delete set null,
+  updated_at timestamptz not null default now(),
+  primary key (store_id, table_name, row_id)
+);
+
+create index if not exists sync_rows_store_version_idx
+  on public.sync_rows (store_id, version);
+
+alter table public.sync_rows enable row level security;
+revoke all on public.sync_rows from anon, authenticated;
+
+create table if not exists public.store_invites (
+  code text primary key,
+  store_id uuid not null references public.stores (id) on delete cascade,
+  created_by uuid not null references auth.users (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  used_by uuid references auth.users (id) on delete set null,
+  used_at timestamptz
+);
+
+alter table public.store_invites enable row level security;
+revoke all on public.store_invites from anon, authenticated;
+
+-- Membatasi tebakan kode undangan.
+create table if not exists public.invite_attempts (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  day date not null,
+  attempts int not null default 0,
+  primary key (user_id, day)
+);
+
+alter table public.invite_attempts enable row level security;
+revoke all on public.invite_attempts from anon, authenticated;
+
+create or replace function public.set_store_sync(
+  p_store uuid,
+  p_enabled boolean
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if public.store_role(p_store) is distinct from 'owner' then
+    raise exception 'owner only' using errcode = '42501';
+  end if;
+  update public.stores set sync_enabled = coalesce(p_enabled, false)
+  where id = p_store;
+  -- Mematikan = data toko di server dihapus, karyawan dan undangan dicabut.
+  if not coalesce(p_enabled, false) then
+    delete from public.sync_rows where store_id = p_store;
+    delete from public.store_members where store_id = p_store;
+    delete from public.store_invites where store_id = p_store;
+  end if;
+end;
+$$;
+
+revoke all on function public.set_store_sync(uuid, boolean) from public, anon;
+grant execute on function public.set_store_sync(uuid, boolean) to authenticated;
+
+create or replace function public.create_store_invite(p_store uuid)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_code text;
+begin
+  if public.store_role(p_store) is distinct from 'owner' then
+    raise exception 'owner only' using errcode = '42501';
+  end if;
+  if not coalesce(
+    (select sync_enabled from public.stores where id = p_store), false
+  ) then
+    raise exception 'sync required' using errcode = '22023';
+  end if;
+  delete from public.store_invites
+  where store_id = p_store and used_at is null and expires_at < now();
+  if (
+    select count(*) from public.store_invites
+    where store_id = p_store and used_at is null
+  ) >= 5 then
+    raise exception 'too many active invites' using errcode = '22023';
+  end if;
+  -- 10 karakter heksadesimal: sekitar satu triliun kemungkinan.
+  v_code := upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 10));
+  insert into public.store_invites (code, store_id, created_by, expires_at)
+  values (v_code, p_store, auth.uid(), now() + interval '48 hours');
+  return v_code;
+end;
+$$;
+
+revoke all on function public.create_store_invite(uuid) from public, anon;
+grant execute on function public.create_store_invite(uuid) to authenticated;
+
+-- Mengembalikan id toko, atau null bila kodenya salah/kedaluwarsa/terpakai.
+create or replace function public.accept_store_invite(p_code text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_invite public.store_invites%rowtype;
+  v_attempts int;
+  v_owner uuid;
+  v_sync boolean;
+begin
+  if auth.uid() is null then
+    raise exception 'not authenticated' using errcode = '42501';
+  end if;
+
+  insert into public.invite_attempts (user_id, day, attempts)
+  values (auth.uid(), (now() at time zone 'Asia/Jakarta')::date, 1)
+  on conflict (user_id, day)
+    do update set attempts = public.invite_attempts.attempts + 1
+  returning attempts into v_attempts;
+  if v_attempts > 20 then
+    raise exception 'too many attempts' using errcode = '54000';
+  end if;
+
+  select * into v_invite from public.store_invites
+  where code = upper(regexp_replace(coalesce(p_code, ''), '[^0-9A-Za-z]', '', 'g'))
+    and used_at is null
+    and expires_at > now()
+  for update;
+  if not found then
+    -- Bukan exception: exception membatalkan seluruh fungsi, termasuk
+    -- penambahan hitungan percobaan di atas, sehingga tebakan tak terbatas.
+    return null;
+  end if;
+
+  select owner_uid, sync_enabled into v_owner, v_sync
+  from public.stores where id = v_invite.store_id;
+  if v_owner = auth.uid() then
+    raise exception 'own store' using errcode = '22023';
+  end if;
+  if not coalesce(v_sync, false) then
+    raise exception 'sync disabled' using errcode = '22023';
+  end if;
+
+  insert into public.store_members (store_id, user_id)
+  values (v_invite.store_id, auth.uid())
+  on conflict do nothing;
+  update public.store_invites
+  set used_by = auth.uid(), used_at = now()
+  where code = v_invite.code;
+  return v_invite.store_id;
+end;
+$$;
+
+revoke all on function public.accept_store_invite(text) from public, anon;
+grant execute on function public.accept_store_invite(text) to authenticated;
+
+drop function if exists public.store_member_list(uuid);
+create function public.store_member_list(p_store uuid)
+returns table (user_id uuid, email text, joined_at timestamptz)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if public.store_role(p_store) is distinct from 'owner' then
+    raise exception 'owner only' using errcode = '42501';
+  end if;
+  return query
+  select m.user_id, u.email::text, m.created_at
+  from public.store_members m
+  join auth.users u on u.id = m.user_id
+  where m.store_id = p_store
+  order by m.created_at;
+end;
+$$;
+
+revoke all on function public.store_member_list(uuid) from public, anon;
+grant execute on function public.store_member_list(uuid) to authenticated;
+
+create or replace function public.remove_store_member(
+  p_store uuid,
+  p_user uuid
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if public.store_role(p_store) is distinct from 'owner' then
+    raise exception 'owner only' using errcode = '42501';
+  end if;
+  delete from public.store_members
+  where store_id = p_store and user_id = p_user;
+end;
+$$;
+
+revoke all on function public.remove_store_member(uuid, uuid) from public, anon;
+grant execute on function public.remove_store_member(uuid, uuid) to authenticated;
+
+create or replace function public.leave_store(p_store uuid)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  delete from public.store_members
+  where store_id = p_store and user_id = auth.uid();
+$$;
+
+revoke all on function public.leave_store(uuid) from public, anon;
+grant execute on function public.leave_store(uuid) to authenticated;
+
+-- Mengirim perubahan dari HP. p_rows: [{table, id, deleted, data}, ...].
+--
+-- Karyawan boleh menambah baris apa pun, tetapi hanya boleh mengubah atau
+-- menghapus baris buatannya sendiri — kecuali mengubah (bukan menghapus)
+-- barang dan kontak. Perubahan yang ditolak tidak membuat seluruh kiriman
+-- gagal: versi baris aslinya dinaikkan, sehingga HP karyawan menariknya
+-- kembali dan kembali sama dengan server. Karyawan tidak pernah bisa
+-- menulis modal (HPP).
+create or replace function public.sync_push(p_store uuid, p_rows jsonb)
+returns bigint
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_role text := public.store_role(p_store);
+  v_row jsonb;
+  v_table text;
+  v_id text;
+  v_deleted boolean;
+  v_data jsonb;
+  v_existing public.sync_rows%rowtype;
+  v_exists boolean;
+  v_allowed boolean;
+  v_cost jsonb;
+  v_version bigint;
+  v_max bigint := 0;
+begin
+  if v_role is null then
+    raise exception 'not a member' using errcode = '42501';
+  end if;
+  if not coalesce(
+    (select sync_enabled from public.stores where id = p_store), false
+  ) then
+    raise exception 'sync disabled' using errcode = '22023';
+  end if;
+  if jsonb_typeof(p_rows) is distinct from 'array'
+     or jsonb_array_length(p_rows) > 500 then
+    raise exception 'invalid batch' using errcode = '22023';
+  end if;
+
+  -- Satu pengirim per toko pada satu waktu: urutan versi = urutan commit,
+  -- jadi HP yang menarik tidak pernah melompati perubahan yang belum
+  -- ter-commit.
+  perform pg_advisory_xact_lock(hashtextextended(p_store::text, 0));
+
+  for v_row in select value from jsonb_array_elements(p_rows) loop
+    v_table := v_row->>'table';
+    v_id := v_row->>'id';
+    v_deleted := coalesce((v_row->>'deleted')::boolean, false);
+    v_data := v_row->'data';
+
+    if v_table is null or v_table not in (
+         'products', 'contacts', 'transactions', 'transaction_items',
+         'stock_movements', 'debt_payments'
+       )
+       or coalesce(v_id, '') = '' or length(v_id) > 64 then
+      raise exception 'invalid row' using errcode = '22023';
+    end if;
+    if not v_deleted and (
+         jsonb_typeof(v_data) is distinct from 'object'
+         or octet_length(v_data::text) > 20000
+         or (v_data ? 'store_id' and v_data->>'store_id' <> p_store::text)
+       ) then
+      raise exception 'invalid row data' using errcode = '22023';
+    end if;
+
+    select * into v_existing from public.sync_rows
+    where store_id = p_store and table_name = v_table and row_id = v_id
+    for update;
+    v_exists := found;
+
+    v_allowed := true;
+    if v_role = 'staff' then
+      if v_exists and v_existing.created_by is distinct from auth.uid() then
+        v_allowed := not v_deleted and v_table in ('products', 'contacts');
+      end if;
+      if v_allowed and not v_deleted and v_table = 'products' then
+        v_data := v_data || jsonb_build_object(
+          'cost_price',
+          case when v_exists then coalesce(v_existing.data->'cost_price', 'null'::jsonb)
+               else 'null'::jsonb end
+        );
+      end if;
+      if v_allowed and not v_deleted and v_table = 'transaction_items' then
+        if v_exists then
+          v_cost := coalesce(v_existing.data->'unit_cost', 'null'::jsonb);
+        else
+          -- Penjualan oleh karyawan memakai modal katalog saat itu.
+          select coalesce(p.data->'cost_price', 'null'::jsonb) into v_cost
+          from public.sync_rows p
+          where p.store_id = p_store and p.table_name = 'products'
+            and p.row_id = v_data->>'product_id' and not p.deleted
+            and exists (
+              select 1 from public.sync_rows t
+              where t.store_id = p_store and t.table_name = 'transactions'
+                and t.row_id = v_data->>'transaction_id'
+                and t.data->>'category' = 'penjualan'
+            );
+          v_cost := coalesce(v_cost, 'null'::jsonb);
+        end if;
+        v_data := v_data || jsonb_build_object('unit_cost', v_cost);
+      end if;
+    end if;
+
+    v_version := nextval('public.sync_version_seq');
+    if not v_allowed then
+      update public.sync_rows set version = v_version
+      where store_id = p_store and table_name = v_table and row_id = v_id;
+      v_max := greatest(v_max, v_version);
+      continue;
+    end if;
+
+    insert into public.sync_rows (
+      store_id, table_name, row_id, data, deleted, version,
+      created_by, updated_by, updated_at
+    ) values (
+      p_store, v_table, v_id,
+      case when v_deleted then null else v_data end,
+      v_deleted, v_version, auth.uid(), auth.uid(), now()
+    )
+    on conflict (store_id, table_name, row_id) do update
+      set data = excluded.data,
+          deleted = excluded.deleted,
+          version = excluded.version,
+          updated_by = excluded.updated_by,
+          updated_at = now();
+    v_max := greatest(v_max, v_version);
+
+    -- Menghapus transaksi ikut menghapus barang, pembayaran, dan stok dari
+    -- pembeliannya, seperti ON DELETE CASCADE di HP.
+    if v_deleted and v_table = 'transactions' then
+      with items as (
+        select row_id from public.sync_rows
+        where store_id = p_store and table_name = 'transaction_items'
+          and not deleted and data->>'transaction_id' = v_id
+      )
+      update public.sync_rows
+      set deleted = true, data = null,
+          version = nextval('public.sync_version_seq'),
+          updated_by = auth.uid(), updated_at = now()
+      where store_id = p_store and not deleted and (
+        (table_name = 'transaction_items' and row_id in (select row_id from items))
+        or (table_name = 'stock_movements'
+            and data->>'transaction_item_id' in (select row_id from items))
+        or (table_name = 'debt_payments' and data->>'transaction_id' = v_id)
+      );
+    end if;
+  end loop;
+
+  return v_max;
+end;
+$$;
+
+revoke all on function public.sync_push(uuid, jsonb) from public, anon;
+grant execute on function public.sync_push(uuid, jsonb) to authenticated;
+
+-- Menarik perubahan sesudah versi p_after, terlama dulu. Modal (HPP) tidak
+-- pernah dikirim ke HP karyawan.
+drop function if exists public.sync_pull(uuid, bigint, int);
+create function public.sync_pull(
+  p_store uuid,
+  p_after bigint,
+  p_limit int default 500
+) returns table (
+  table_name text,
+  row_id text,
+  data jsonb,
+  deleted boolean,
+  version bigint
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_role text := public.store_role(p_store);
+begin
+  if v_role is null then
+    raise exception 'not a member' using errcode = '42501';
+  end if;
+  return query
+  select s.table_name, s.row_id,
+         case when v_role = 'staff' and s.data is not null
+                   and s.table_name in ('products', 'transaction_items')
+              then s.data - 'cost_price' - 'unit_cost'
+              else s.data end,
+         s.deleted, s.version
+  from public.sync_rows s
+  where s.store_id = p_store and s.version > coalesce(p_after, 0)
+  order by s.version
+  limit least(greatest(coalesce(p_limit, 500), 1), 1000);
+end;
+$$;
+
+revoke all on function public.sync_pull(uuid, bigint, int) from public, anon;
+grant execute on function public.sync_pull(uuid, bigint, int) to authenticated;
+
+-- Toko tempat pengguna menjadi karyawan (untuk daftar toko di HP-nya).
+drop function if exists public.my_staff_stores();
+create function public.my_staff_stores()
+returns setof public.stores
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select s.* from public.stores s
+  join public.store_members m on m.store_id = s.id
+  where m.user_id = auth.uid() and s.sync_enabled
+  order by s.created_at;
+$$;
+
+revoke all on function public.my_staff_stores() from public, anon;
+grant execute on function public.my_staff_stores() to authenticated;
 
 -- =============================================================
 -- 9. Menambah admin

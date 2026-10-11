@@ -32,3 +32,5 @@ echo "== setup.sql (kedua: harus aman dijalankan ulang)"
 psql -f /work/setup.sql
 echo "== uji kebijakan"
 psql -f /work/tests/10_policies.sql
+echo "== uji sinkronisasi dan karyawan"
+psql -f /work/tests/20_sync_team.sql
