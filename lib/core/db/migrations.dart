@@ -7,7 +7,7 @@ library;
 
 import 'package:sqflite/sqflite.dart';
 
-const int schemaVersion = 5;
+const int schemaVersion = 6;
 
 class Migration {
   final int version;
@@ -219,5 +219,10 @@ const List<Migration> migrations = [
     ''',
     'CREATE INDEX idx_debt_payments_tx ON debt_payments(transaction_id)',
     'CREATE INDEX idx_transactions_credit ON transactions(store_id, on_credit)',
+  ]),
+  // Jatuh tempo kasbon: awal hari jatuh tempo (milidetik epoch), opsional.
+  Migration(6, [
+    'ALTER TABLE transactions ADD COLUMN due_at INTEGER',
+    'CREATE INDEX idx_transactions_due ON transactions(store_id, due_at)',
   ]),
 ];

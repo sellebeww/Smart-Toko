@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import '../../../core/format.dart';
 import '../../../core/ui/figma_icon.dart';
 import '../../../core/transaction_kind.dart';
+import '../../debts/due_label.dart';
 import '../domain/transaction_record.dart';
 
 class TransactionTile extends StatelessWidget {
@@ -155,13 +156,23 @@ class _CreditBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final unpaid = record.isUnpaid;
+    final now = DateTime.now();
+    final overdue = record.isOverdue(now);
+    final due = record.dueAt;
     final label = unpaid
-        ? 'Belum lunas · sisa ${formatRupiah(record.outstanding)}'
+        ? [
+            'Belum lunas · sisa ${formatRupiah(record.outstanding)}',
+            if (due != null) dueLabel(due, now),
+          ].join(' · ')
         : 'Lunas';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: unpaid ? const Color(0xFFFFF1DF) : const Color(0xFFE8F2E9),
+        color: overdue
+            ? const Color(0xFFFDE7E7)
+            : unpaid
+            ? const Color(0xFFFFF1DF)
+            : const Color(0xFFE8F2E9),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
@@ -169,7 +180,11 @@ class _CreditBadge extends StatelessWidget {
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w600,
-          color: unpaid ? const Color(0xFFAD642C) : const Color(0xFF176448),
+          color: overdue
+              ? const Color(0xFFB3261E)
+              : unpaid
+              ? const Color(0xFFAD642C)
+              : const Color(0xFF176448),
         ),
       ),
     );

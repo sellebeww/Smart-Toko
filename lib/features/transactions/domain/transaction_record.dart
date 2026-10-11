@@ -70,6 +70,9 @@ class TxRecord {
   /// diisi dari tabel pembayaran saat dibaca, bukan disimpan di baris ini.
   final int paidAmount;
 
+  /// Hari jatuh tempo kasbon (awal hari), bila disepakati.
+  final DateTime? dueAt;
+
   /// Email akun yang mencatat; kosong untuk catatan sebelum kolom ini ada.
   final String? recordedBy;
   final DateTime createdAt;
@@ -91,6 +94,7 @@ class TxRecord {
     this.contactId,
     this.onCredit = false,
     this.paidAmount = 0,
+    this.dueAt,
     this.recordedBy,
   });
 
@@ -99,6 +103,20 @@ class TxRecord {
       onCredit ? (totalAmount - paidAmount).clamp(0, totalAmount) : 0;
 
   bool get isUnpaid => outstanding > 0;
+
+  /// Belum lunas dan hari jatuh temponya sudah lewat.
+  bool isOverdue(DateTime now) => daysOverdue(now) > 0;
+
+  /// Berapa hari lewat jatuh tempo; 0 bila belum lewat, lunas, atau tanpa
+  /// jatuh tempo.
+  int daysOverdue(DateTime now) {
+    final due = dueAt;
+    if (!isUnpaid || due == null) return 0;
+    final today = DateTime(now.year, now.month, now.day);
+    final dueDay = DateTime(due.year, due.month, due.day);
+    final days = today.difference(dueDay).inDays;
+    return days > 0 ? days : 0;
+  }
 
   Map<String, Object?> toRow() => {
     'id': id,
@@ -111,6 +129,7 @@ class TxRecord {
     'total_amount': totalAmount,
     'contact_id': contactId,
     'on_credit': onCredit ? 1 : 0,
+    'due_at': dueAt?.millisecondsSinceEpoch,
     'recorded_by': recordedBy,
     'created_at': createdAt.millisecondsSinceEpoch,
     'updated_at': updatedAt.millisecondsSinceEpoch,
@@ -138,6 +157,11 @@ class TxRecord {
       contactId: row['contact_id'] as String?,
       onCredit: ((row['on_credit'] as num?) ?? 0) != 0,
       paidAmount: paidAmount,
+      dueAt: row['due_at'] == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(
+              (row['due_at']! as num).toInt(),
+            ),
       recordedBy: row['recorded_by'] as String?,
       createdAt: DateTime.fromMillisecondsSinceEpoch(
         (row['created_at']! as num).toInt(),

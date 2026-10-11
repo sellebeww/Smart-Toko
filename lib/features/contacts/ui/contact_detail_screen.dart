@@ -10,6 +10,8 @@ import '../../../app/providers.dart';
 import '../../../core/db/dao/contact_dao.dart';
 import '../../../core/format.dart';
 import '../../../core/transaction_kind.dart';
+import '../../debts/data/debt_repository.dart';
+import '../../debts/debts_providers.dart';
 import '../../debts/reminder.dart';
 import '../../stores/stores_providers.dart';
 import '../../transactions/domain/transaction_record.dart';
@@ -18,13 +20,20 @@ import '../../transactions/ui/transaction_tile.dart';
 import 'contact_form_sheet.dart';
 
 final _contactDetailProvider = FutureProvider.autoDispose
-    .family<({ContactRecord contact, List<TxRecord> transactions})?, String>((
-      ref,
-      id,
-    ) async {
+    .family<
+      ({
+        ContactRecord contact,
+        List<TxRecord> transactions,
+        PaymentRecord record,
+      })?,
+      String
+    >((ref, id) async {
       ref.watch(dataRevisionProvider);
       final contact = await ref.watch(contactDaoProvider).findById(id);
       if (contact == null) return null;
+      final record = await ref
+          .watch(debtRepositoryProvider)
+          .paymentRecord(contact.storeId, id);
       final transactions = await ref
           .watch(transactionRepositoryProvider)
           .listBetween(
@@ -33,7 +42,7 @@ final _contactDetailProvider = FutureProvider.autoDispose
             to: DateTime.now().add(const Duration(days: 1)),
             contactId: id,
           );
-      return (contact: contact, transactions: transactions);
+      return (contact: contact, transactions: transactions, record: record);
     });
 
 class ContactDetailScreen extends ConsumerWidget {
@@ -57,6 +66,7 @@ class ContactDetailScreen extends ConsumerWidget {
       since: unpaid
           .map((t) => t.occurredAt)
           .reduce((a, b) => a.isBefore(b) ? a : b),
+      dueAt: _earliestDue(unpaid),
     );
     final link = whatsappLink(contact.phone, message);
     var opened = false;
@@ -68,6 +78,17 @@ class ContactDetailScreen extends ConsumerWidget {
       }
     }
     if (!opened) await SharePlus.instance.share(ShareParams(text: message));
+  }
+
+  static DateTime? _earliestDue(List<TxRecord> unpaid) {
+    DateTime? earliest;
+    for (final t in unpaid) {
+      final due = t.dueAt;
+      if (due != null && (earliest == null || due.isBefore(earliest))) {
+        earliest = due;
+      }
+    }
+    return earliest;
   }
 
   Future<void> _delete(
@@ -201,6 +222,14 @@ class ContactDetailScreen extends ConsumerWidget {
                           'transaksinya untuk mencatat pembayaran.',
                           style: theme.textTheme.bodySmall,
                         ),
+                        if (unpaid.any((t) => t.isOverdue(DateTime.now())))
+                          Text(
+                            'Ada yang sudah lewat jatuh tempo.',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.error,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         if (c.kind == ContactKind.pelanggan) ...[
                           const SizedBox(height: 10),
                           OutlinedButton.icon(
@@ -239,6 +268,8 @@ class ContactDetailScreen extends ConsumerWidget {
                   ],
                 ),
               ),
+              if (data.record.settled > 0)
+                _PaymentRecordTile(record: data.record),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
                 child: Row(
@@ -279,6 +310,40 @@ class ContactDetailScreen extends ConsumerWidget {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// "Lunas 6 kali · 2 kali telat · rata-rata 9 hari": bahan pertimbangan
+/// sebelum memberi kasbon lagi.
+class _PaymentRecordTile extends StatelessWidget {
+  final PaymentRecord record;
+  const _PaymentRecordTile({required this.record});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final avg = record.averageDaysToSettle;
+    final parts = [
+      'Lunas ${record.settled} kali',
+      if (record.late > 0)
+        '${record.late} kali telat'
+      else if (record.withDueDate > 0)
+        'selalu tepat waktu',
+      if (avg != null) 'rata-rata ${avg.round()} hari',
+    ];
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: ListTile(
+        leading: Icon(
+          record.late > 0 ? Icons.history_toggle_off : Icons.verified_outlined,
+          color: record.late > 0
+              ? theme.colorScheme.error
+              : theme.colorScheme.primary,
+        ),
+        title: const Text('Riwayat bayar kasbon'),
+        subtitle: Text(parts.join(' · ')),
       ),
     );
   }

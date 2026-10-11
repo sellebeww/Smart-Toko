@@ -626,9 +626,11 @@ class _DebtAlert extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final totals = ref.watch(debtTotalsProvider).value;
     if (totals == null || totals.isEmpty) return const SizedBox.shrink();
+    final overdue = totals.overdueReceivable + totals.overduePayable;
     final parts = [
       if (totals.receivable > 0) 'Ditagih ${formatRupiah(totals.receivable)}',
       if (totals.payable > 0) 'Dibayar ${formatRupiah(totals.payable)}',
+      if (overdue > 0) '${formatRupiah(overdue)} telat',
     ];
     return Card(
       margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),

@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 
 import '../../../core/confidence.dart';
 import '../../../core/db/dao/contact_dao.dart';
+import '../../debts/due_label.dart';
 import '../../../core/format.dart';
 import '../../../core/transaction_kind.dart';
 import '../domain/confirmed_draft.dart';
@@ -113,6 +114,25 @@ class _ConfirmationSheetState extends State<ConfirmationSheet> {
       _editedFields.add('credit');
       _draft = _draft.copyWith(onCredit: value);
     });
+  }
+
+  void _setDueAt(DateTime? due) {
+    setState(() {
+      _editedFields.add('dueAt');
+      _draft = _draft.copyWith(dueAt: due);
+    });
+  }
+
+  Future<void> _pickDueDate() async {
+    final base = _draft.occurredAt;
+    final picked = await showDatePicker(
+      context: context,
+      firstDate: DateTime(base.year, base.month, base.day),
+      lastDate: base.add(const Duration(days: 366)),
+      initialDate: _draft.dueAt ?? base.add(const Duration(days: 7)),
+      helpText: 'Jatuh tempo',
+    );
+    if (picked != null) _setDueAt(picked);
   }
 
   void _clearContact() {
@@ -300,6 +320,16 @@ class _ConfirmationSheetState extends State<ConfirmationSheet> {
                                 _draft.isCredit && _draft.contactId == null,
                             onChanged: _setOnCredit,
                           ),
+                          if (_draft.isCredit)
+                            _DueDateRow(
+                              dueAt: _draft.dueAt,
+                              occurredAt: _draft.occurredAt,
+                              onQuick: (days) => _setDueAt(
+                                _draft.occurredAt.add(Duration(days: days)),
+                              ),
+                              onPick: _pickDueDate,
+                              onClear: () => _setDueAt(null),
+                            ),
                         ],
                       const SizedBox(height: 20),
                       for (var i = 0; i < _draft.items.length; i++) ...[
@@ -527,6 +557,81 @@ class _ContactRow extends StatelessWidget {
         onPressed: onPick,
         onDeleted: onClear,
         deleteButtonTooltipMessage: 'Lepas ${kind.label.toLowerCase()}',
+      ),
+    );
+  }
+}
+
+/// Jatuh tempo kasbon: opsional, dengan pilihan cepat.
+class _DueDateRow extends StatelessWidget {
+  final DateTime? dueAt;
+  final DateTime occurredAt;
+  final ValueChanged<int> onQuick;
+  final VoidCallback onPick;
+  final VoidCallback onClear;
+
+  const _DueDateRow({
+    required this.dueAt,
+    required this.occurredAt,
+    required this.onQuick,
+    required this.onPick,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final due = dueAt;
+    bool isQuick(int days) {
+      if (due == null) return false;
+      final target = occurredAt.add(Duration(days: days));
+      return due.year == target.year &&
+          due.month == target.month &&
+          due.day == target.day;
+    }
+
+    final custom = due != null && !dueQuickOptions.any((o) => isQuick(o.$2));
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Jatuh tempo (opsional)',
+            style: Theme.of(context).textTheme.labelMedium,
+          ),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              ChoiceChip(
+                label: const Text('Tanpa'),
+                selected: due == null,
+                onSelected: (_) => onClear(),
+              ),
+              for (final (label, days) in dueQuickOptions)
+                ChoiceChip(
+                  label: Text(label),
+                  selected: isQuick(days),
+                  onSelected: (_) => onQuick(days),
+                ),
+              ChoiceChip(
+                avatar: const Icon(Icons.event, size: 16),
+                label: Text(custom ? formatShortDate(due) : 'Pilih tanggal'),
+                selected: custom,
+                onSelected: (_) => onPick(),
+              ),
+            ],
+          ),
+          if (due != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Bayar paling lambat ${formatShortDate(due)}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+        ],
       ),
     );
   }

@@ -27,6 +27,7 @@ const List<String> transactionsHeader = [
   'Pelanggan/Supplier',
   'Status Bayar',
   'Sisa Belum Dibayar',
+  'Jatuh Tempo',
 ];
 
 const List<String> dailySummaryHeader = [
@@ -135,6 +136,14 @@ List<int> buildTransactionsWorkbook(
         remaining == null
             ? (TextCellValue(''), null)
             : (IntCellValue(remaining), _money),
+        (
+          TextCellValue(
+            record.isUnpaid && record.dueAt != null
+                ? formatIsoDate(record.dueAt!)
+                : '',
+          ),
+          null,
+        ),
       ]);
     }
   }

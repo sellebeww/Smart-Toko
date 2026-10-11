@@ -59,6 +59,7 @@ class RuleBasedParser {
     final consumed = List<bool>.filled(tokens.length, false);
 
     final onCredit = _consumeCreditWords(tokens, consumed);
+    final dueInDays = onCredit ? _consumeDueWords(tokens, consumed) : null;
     final direction = _findDirection(tokens, consumed, sttConfidence);
     final segments = _splitSegments(tokens, consumed);
 
@@ -101,7 +102,49 @@ class RuleBasedParser {
       totalAmount: totalAmount,
       unmatchedTokens: unmatched,
       onCredit: onCredit,
+      dueInDays: dueInDays,
     );
+  }
+
+  /// "bayar"/"lunas" tepat sebelum kata waktu ("bayar minggu depan") adalah
+  /// bagian dari janji bayar, bukan kata kerja transaksi.
+  void _consumePayVerb(
+    List<String> tokens,
+    List<bool> consumed,
+    int timeIndex,
+  ) {
+    final before = timeIndex - 1;
+    if (before >= 0 && payVerbs.contains(tokens[before])) {
+      consumed[before] = true;
+    }
+  }
+
+  /// "bayar besok", "lunas minggu depan": kata waktunya ditandai terpakai
+  /// dan dijadikan jatuh tempo. Hanya dipanggil bila ada kata kasbon, jadi
+  /// "beli roti buat besok" tidak berubah makna.
+  int? _consumeDueWords(List<String> tokens, List<bool> consumed) {
+    int? days;
+    // "besok" pada "bayar besok" sudah terpakai sebagai kata kasbon; tetap
+    // dibaca sebagai jatuh tempo.
+    for (var i = 0; i < tokens.length; i++) {
+      final single = dueWords[tokens[i]];
+      if (single != null) {
+        consumed[i] = true;
+        _consumePayVerb(tokens, consumed, i);
+        days ??= single;
+        continue;
+      }
+      if (i + 1 < tokens.length) {
+        final pair = duePhrases[(tokens[i], tokens[i + 1])];
+        if (pair != null) {
+          consumed[i] = true;
+          consumed[i + 1] = true;
+          _consumePayVerb(tokens, consumed, i);
+          days ??= pair;
+        }
+      }
+    }
+    return days;
   }
 
   /// Menandai kata kasbon sebagai terpakai supaya tidak jadi nama barang

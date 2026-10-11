@@ -50,6 +50,9 @@ String buildReceiptText(
           ? 'Sisa belum dibayar: ${formatRupiah(record.outstanding)}'
           : 'LUNAS',
     );
+    if (record.isUnpaid && record.dueAt != null) {
+      lines.add('Jatuh tempo: ${formatShortDate(record.dueAt!)}');
+    }
   }
 
   lines

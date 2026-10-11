@@ -10,6 +10,7 @@ import '../../../core/transaction_kind.dart';
 import '../../contacts/ui/contact_detail_screen.dart';
 import '../data/debt_repository.dart';
 import '../debts_providers.dart';
+import '../due_label.dart';
 
 class DebtsScreen extends ConsumerWidget {
   const DebtsScreen({super.key});
@@ -61,7 +62,7 @@ class _TotalsHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    Widget cell(String label, int amount, Color color) => Expanded(
+    Widget cell(String label, int amount, int overdue, Color color) => Expanded(
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
@@ -80,6 +81,14 @@ class _TotalsHeader extends StatelessWidget {
                 fontWeight: FontWeight.w700,
               ),
             ),
+            if (overdue > 0)
+              Text(
+                '${formatRupiah(overdue)} telat',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.error,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
           ],
         ),
       ),
@@ -88,9 +97,19 @@ class _TotalsHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
       child: Row(
         children: [
-          cell('Harus ditagih', totals.receivable, theme.colorScheme.primary),
+          cell(
+            'Harus ditagih',
+            totals.receivable,
+            totals.overdueReceivable,
+            theme.colorScheme.primary,
+          ),
           const SizedBox(width: 12),
-          cell('Harus dibayar', totals.payable, theme.colorScheme.error),
+          cell(
+            'Harus dibayar',
+            totals.payable,
+            totals.overduePayable,
+            theme.colorScheme.error,
+          ),
         ],
       ),
     );
@@ -124,7 +143,9 @@ class _BalanceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final old = DateTime.now().difference(balance.oldest).inDays >= 30;
+    final now = DateTime.now();
+    final old = now.difference(balance.oldest).inDays >= 30;
+    final due = balance.nextDue;
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
       child: ListTile(
@@ -135,12 +156,18 @@ class _BalanceTile extends StatelessWidget {
         ),
         title: Text(balance.name),
         subtitle: Text(
-          '${balance.openCount} transaksi · sudah '
-          '${ageLabel(balance.oldest, DateTime.now())}',
+          [
+            '${balance.openCount} transaksi',
+            'sudah ${ageLabel(balance.oldest, now)}',
+            if (due != null) dueLabel(due, now),
+          ].join(' · '),
           style: theme.textTheme.bodySmall?.copyWith(
-            color: old ? theme.colorScheme.error : null,
+            color: balance.isOverdue || old ? theme.colorScheme.error : null,
           ),
         ),
+        leading: balance.isOverdue
+            ? Icon(Icons.warning_amber_rounded, color: theme.colorScheme.error)
+            : null,
         trailing: Text(
           formatRupiah(balance.outstanding),
           style: theme.textTheme.titleSmall,

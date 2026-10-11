@@ -131,6 +131,7 @@ class CloudLlmParser implements LlmParser {
       // Server AI tidak diminta mengenali kasbon; petunjuk dari parser
       // lokal tetap dipakai.
       onCredit: ruleResult.onCredit,
+      dueInDays: ruleResult.dueInDays,
     );
   }
 }

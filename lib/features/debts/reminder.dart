@@ -14,11 +14,13 @@ String buildReminderMessage({
   required int outstanding,
   required int openCount,
   required DateTime since,
+  DateTime? dueAt,
 }) {
   final count = openCount > 1 ? ' ($openCount transaksi)' : '';
+  final due = dueAt == null ? '' : ', jatuh tempo ${formatShortDate(dueAt)}';
   return 'Halo $contactName, ini pengingat dari $storeName. '
       'Masih ada sisa pembayaran ${formatRupiah(outstanding)}$count '
-      'sejak ${formatShortDate(since)}. '
+      'sejak ${formatShortDate(since)}$due. '
       'Mohon konfirmasinya ya. Terima kasih 🙏';
 }
 

@@ -99,6 +99,10 @@ class ParseResult {
   /// petunjuk: draf tetap meminta pengguna memilih siapa yang berutang.
   final bool onCredit;
 
+  /// Jatuh tempo yang diucapkan ("bayar besok", "minggu depan"), dalam hari
+  /// sejak transaksi. Hanya diisi bila [onCredit].
+  final int? dueInDays;
+
   const ParseResult({
     required this.transcript,
     required this.parserVersion,
@@ -109,6 +113,7 @@ class ParseResult {
     required this.unmatchedTokens,
     this.category = const ParsedField.missing(),
     this.onCredit = false,
+    this.dueInDays,
   });
 
   factory ParseResult.empty({
@@ -169,6 +174,7 @@ class ParseResult {
     ParsedField<int>? totalAmount,
     List<String>? unmatchedTokens,
     bool? onCredit,
+    int? dueInDays,
   }) => ParseResult(
     transcript: transcript,
     parserVersion: parserVersion,
@@ -179,6 +185,7 @@ class ParseResult {
     totalAmount: totalAmount ?? this.totalAmount,
     unmatchedTokens: unmatchedTokens ?? this.unmatchedTokens,
     onCredit: onCredit ?? this.onCredit,
+    dueInDays: dueInDays ?? this.dueInDays,
   );
 
   @override

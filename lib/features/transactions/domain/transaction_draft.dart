@@ -54,6 +54,8 @@ class DraftField<T> {
   }
 }
 
+DateTime _dayStart(DateTime d) => DateTime(d.year, d.month, d.day);
+
 /// Penanda "tidak diubah" untuk copyWith pada field yang boleh dikosongkan.
 const Object _keep = Object();
 
@@ -151,6 +153,9 @@ class TransactionDraft {
   /// untuk penjualan dan pembelian; lihat [isCredit].
   final bool onCredit;
 
+  /// Jatuh tempo kasbon (opsional). Diabaikan bila bukan kasbon.
+  final DateTime? dueAt;
+
   /// Transkrip asli, disimpan hanya untuk ditampilkan saat konfirmasi.
   final String? transcript;
 
@@ -163,6 +168,7 @@ class TransactionDraft {
     this.note,
     this.contactId,
     this.onCredit = false,
+    this.dueAt,
     this.transcript,
   });
 
@@ -195,6 +201,13 @@ class TransactionDraft {
     occurredAt: occurredAt ?? DateTime.now(),
     source: source,
     onCredit: result.onCredit,
+    dueAt: result.dueInDays == null
+        ? null
+        : _dayStart(
+            (occurredAt ?? DateTime.now()).add(
+              Duration(days: result.dueInDays!),
+            ),
+          ),
     transcript: result.transcript,
   );
 
@@ -231,6 +244,7 @@ class TransactionDraft {
     source: record.source,
     contactId: record.contactId,
     onCredit: record.onCredit,
+    dueAt: record.dueAt,
   );
 
   /// Kategori yang akan disimpan. Kategori yang tidak searah dengan arah
@@ -279,6 +293,7 @@ class TransactionDraft {
     String? note,
     Object? contactId = _keep,
     bool? onCredit,
+    Object? dueAt = _keep,
   }) => TransactionDraft(
     direction: direction ?? this.direction,
     category: category ?? this.category,
@@ -289,6 +304,9 @@ class TransactionDraft {
         ? this.contactId
         : contactId as String?,
     onCredit: onCredit ?? this.onCredit,
+    dueAt: identical(dueAt, _keep)
+        ? this.dueAt
+        : (dueAt == null ? null : _dayStart(dueAt as DateTime)),
     source: source,
     transcript: transcript,
   );

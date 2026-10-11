@@ -134,6 +134,9 @@ class TransactionRepository {
       totalAmount: draft.total,
       contactId: draft.contactId,
       onCredit: draft.isCredit,
+      dueAt: draft.isCredit && draft.dueAt != null
+          ? DateTime(draft.dueAt!.year, draft.dueAt!.month, draft.dueAt!.day)
+          : null,
       recordedBy: recordedBy,
       createdAt: now,
       updatedAt: now,
@@ -290,6 +293,7 @@ class TransactionRepository {
       contactId: record.contactId,
       onCredit: record.onCredit,
       paidAmount: paid,
+      dueAt: record.dueAt,
       recordedBy: record.recordedBy,
     );
   }

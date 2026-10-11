@@ -51,6 +51,12 @@ class ContactBalance {
   /// Tanggal transaksi belum lunas yang paling lama.
   final DateTime oldest;
 
+  /// Bagian sisa yang sudah lewat jatuh tempo.
+  final int overdue;
+
+  /// Jatuh tempo terdekat di antara yang belum lunas, bila ada.
+  final DateTime? nextDue;
+
   const ContactBalance({
     required this.contactId,
     required this.name,
@@ -58,6 +64,49 @@ class ContactBalance {
     required this.outstanding,
     required this.openCount,
     required this.oldest,
+    this.overdue = 0,
+    this.nextDue,
+  });
+
+  bool get isOverdue => overdue > 0;
+}
+
+/// Kasbon yang jatuh tempo pada rentang tertentu (untuk pengingat).
+class DueDebt {
+  final String transactionId;
+  final String contactName;
+  final TxDirection direction;
+  final int outstanding;
+  final DateTime dueAt;
+
+  const DueDebt({
+    required this.transactionId,
+    required this.contactName,
+    required this.direction,
+    required this.outstanding,
+    required this.dueAt,
+  });
+}
+
+/// Rekam jejak bayar satu kontak: bahan pertimbangan sebelum memberi kasbon
+/// lagi. Hanya menghitung kasbon yang sudah lunas.
+class PaymentRecord {
+  final int settled;
+
+  /// Yang lunas dan memang punya jatuh tempo — dasar penilaian tepat waktu.
+  final int withDueDate;
+
+  /// Lunas setelah hari jatuh temponya lewat.
+  final int late;
+
+  /// Rata-rata hari dari transaksi sampai lunas; null bila belum ada.
+  final double? averageDaysToSettle;
+
+  const PaymentRecord({
+    this.settled = 0,
+    this.withDueDate = 0,
+    this.late = 0,
+    this.averageDaysToSettle,
   });
 }
 
@@ -68,7 +117,16 @@ class DebtTotals {
   /// Uang yang masih harus dibayar ke supplier.
   final int payable;
 
-  const DebtTotals({this.receivable = 0, this.payable = 0});
+  /// Bagian [receivable] dan [payable] yang sudah lewat jatuh tempo.
+  final int overdueReceivable;
+  final int overduePayable;
+
+  const DebtTotals({
+    this.receivable = 0,
+    this.payable = 0,
+    this.overdueReceivable = 0,
+    this.overduePayable = 0,
+  });
 
   bool get isEmpty => receivable == 0 && payable == 0;
 }
@@ -186,41 +244,63 @@ class DebtRepository {
     });
   }
 
-  Future<DebtTotals> totals(String storeId) async {
-    final rows = await database.db.rawQuery(
-      'SELECT t.direction AS direction, '
-      'COALESCE(SUM($_outstandingSql), 0) AS outstanding '
-      'FROM transactions t WHERE t.store_id = ? AND t.on_credit = 1 '
-      'GROUP BY t.direction',
-      [storeId],
-    );
-    var receivable = 0;
-    var payable = 0;
-    for (final row in rows) {
-      final amount = (row['outstanding']! as num).toInt();
-      if (row['direction'] == TxDirection.masuk.name) {
-        receivable = amount;
-      } else {
-        payable = amount;
-      }
-    }
-    return DebtTotals(receivable: receivable, payable: payable);
+  static int _todayMillis(DateTime? now) {
+    final n = now ?? DateTime.now();
+    return DateTime(n.year, n.month, n.day).millisecondsSinceEpoch;
   }
 
-  /// Sisa per kontak, terbesar dulu. Kontak tanpa sisa tidak muncul.
-  Future<List<ContactBalance>> balances(String storeId) async {
+  /// Sisa yang sudah lewat jatuh tempo, sebagai ekspresi SQL. Parameter
+  /// pertama yang diikat adalah awal hari ini.
+  static const String _overdueSql =
+      'CASE WHEN t.due_at IS NOT NULL AND t.due_at < ?1 '
+      'THEN $_outstandingSql ELSE 0 END';
+
+  Future<DebtTotals> totals(String storeId, {DateTime? now}) async {
+    final rows = await database.db.rawQuery(
+      'SELECT t.direction AS direction, '
+      'COALESCE(SUM($_outstandingSql), 0) AS outstanding, '
+      'COALESCE(SUM($_overdueSql), 0) AS overdue '
+      'FROM transactions t WHERE t.store_id = ?2 AND t.on_credit = 1 '
+      'GROUP BY t.direction',
+      [_todayMillis(now), storeId],
+    );
+    var receivable = 0, payable = 0, overdueIn = 0, overdueOut = 0;
+    for (final row in rows) {
+      final amount = (row['outstanding']! as num).toInt();
+      final overdue = (row['overdue']! as num).toInt();
+      if (row['direction'] == TxDirection.masuk.name) {
+        receivable = amount;
+        overdueIn = overdue;
+      } else {
+        payable = amount;
+        overdueOut = overdue;
+      }
+    }
+    return DebtTotals(
+      receivable: receivable,
+      payable: payable,
+      overdueReceivable: overdueIn,
+      overduePayable: overdueOut,
+    );
+  }
+
+  /// Sisa per kontak: yang sudah telat dulu, lalu terbesar. Kontak tanpa
+  /// sisa tidak muncul.
+  Future<List<ContactBalance>> balances(String storeId, {DateTime? now}) async {
     final rows = await database.db.rawQuery(
       'SELECT t.contact_id AS contact_id, c.name AS name, '
       't.direction AS direction, '
       'SUM($_outstandingSql) AS outstanding, '
+      'SUM($_overdueSql) AS overdue, '
       'SUM(CASE WHEN $_outstandingSql > 0 THEN 1 ELSE 0 END) AS open_count, '
-      'MIN(CASE WHEN $_outstandingSql > 0 THEN t.occurred_at END) AS oldest '
+      'MIN(CASE WHEN $_outstandingSql > 0 THEN t.occurred_at END) AS oldest, '
+      'MIN(CASE WHEN $_outstandingSql > 0 THEN t.due_at END) AS next_due '
       'FROM transactions t JOIN contacts c ON c.id = t.contact_id '
-      'WHERE t.store_id = ? AND t.on_credit = 1 '
+      'WHERE t.store_id = ?2 AND t.on_credit = 1 '
       'GROUP BY t.contact_id, t.direction '
       'HAVING outstanding > 0 '
-      'ORDER BY outstanding DESC',
-      [storeId],
+      'ORDER BY overdue > 0 DESC, outstanding DESC',
+      [_todayMillis(now), storeId],
     );
     return [
       for (final row in rows)
@@ -229,12 +309,109 @@ class DebtRepository {
           name: row['name']! as String,
           direction: TxDirection.fromName(row['direction']! as String)!,
           outstanding: (row['outstanding']! as num).toInt(),
+          overdue: (row['overdue']! as num).toInt(),
           openCount: (row['open_count']! as num).toInt(),
           oldest: DateTime.fromMillisecondsSinceEpoch(
             (row['oldest']! as num).toInt(),
           ),
+          nextDue: row['next_due'] == null
+              ? null
+              : DateTime.fromMillisecondsSinceEpoch(
+                  (row['next_due']! as num).toInt(),
+                ),
         ),
     ];
+  }
+
+  /// Mengubah atau menghapus ([dueAt] null) jatuh tempo satu kasbon.
+  Future<void> setDueDate(String transactionId, DateTime? dueAt) async {
+    final day = dueAt == null
+        ? null
+        : DateTime(dueAt.year, dueAt.month, dueAt.day);
+    final updated = await database.db.update(
+      'transactions',
+      {
+        'due_at': day?.millisecondsSinceEpoch,
+        'updated_at': DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ? AND on_credit = 1',
+      whereArgs: [transactionId],
+    );
+    if (updated == 0) {
+      throw const DebtException('Jatuh tempo hanya untuk transaksi kasbon.');
+    }
+  }
+
+  /// Kasbon belum lunas yang jatuh tempo pada [from, to) — termasuk yang
+  /// sudah lewat bila [from] di masa lalu. Terlama dulu.
+  Future<List<DueDebt>> dueBetween(
+    String storeId, {
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final rows = await database.db.rawQuery(
+      'SELECT t.id AS id, c.name AS name, t.direction AS direction, '
+      't.due_at AS due_at, $_outstandingSql AS outstanding '
+      'FROM transactions t JOIN contacts c ON c.id = t.contact_id '
+      'WHERE t.store_id = ? AND t.on_credit = 1 AND t.due_at IS NOT NULL '
+      'AND t.due_at >= ? AND t.due_at < ? AND $_outstandingSql > 0 '
+      'ORDER BY t.due_at',
+      [storeId, from.millisecondsSinceEpoch, to.millisecondsSinceEpoch],
+    );
+    return [
+      for (final row in rows)
+        DueDebt(
+          transactionId: row['id']! as String,
+          contactName: row['name']! as String,
+          direction: TxDirection.fromName(row['direction']! as String)!,
+          outstanding: (row['outstanding']! as num).toInt(),
+          dueAt: DateTime.fromMillisecondsSinceEpoch(
+            (row['due_at']! as num).toInt(),
+          ),
+        ),
+    ];
+  }
+
+  /// Rekam jejak bayar [contactId] dari kasbon yang sudah lunas.
+  Future<PaymentRecord> paymentRecord(String storeId, String contactId) async {
+    final rows = await database.db.rawQuery(
+      'SELECT t.occurred_at AS occurred_at, t.due_at AS due_at, '
+      't.total_amount AS total, '
+      '(SELECT SUM(p.amount) FROM debt_payments p WHERE p.transaction_id = t.id) AS paid, '
+      '(SELECT MAX(p.paid_at) FROM debt_payments p WHERE p.transaction_id = t.id) AS settled_at '
+      'FROM transactions t '
+      'WHERE t.store_id = ? AND t.contact_id = ? AND t.on_credit = 1',
+      [storeId, contactId],
+    );
+    var settled = 0, late = 0, withDue = 0;
+    var totalDays = 0;
+    for (final row in rows) {
+      final paid = (row['paid'] as num?)?.toInt() ?? 0;
+      final total = (row['total']! as num).toInt();
+      final settledAt = row['settled_at'] as num?;
+      if (settledAt == null || paid < total) continue;
+      settled++;
+      final settledDay = _day(settledAt.toInt());
+      totalDays += settledDay
+          .difference(_day((row['occurred_at']! as num).toInt()))
+          .inDays;
+      final due = row['due_at'] as num?;
+      if (due != null) {
+        withDue++;
+        if (settledDay.isAfter(_day(due.toInt()))) late++;
+      }
+    }
+    return PaymentRecord(
+      settled: settled,
+      withDueDate: withDue,
+      late: late,
+      averageDaysToSettle: settled == 0 ? null : totalDays / settled,
+    );
+  }
+
+  static DateTime _day(int millis) {
+    final d = DateTime.fromMillisecondsSinceEpoch(millis);
+    return DateTime(d.year, d.month, d.day);
   }
 
   /// Sisa satu kontak, dipakai di detail kontak.

@@ -212,6 +212,19 @@ const Set<(String, String)> creditPhrases = {
   ('bayar', 'besok'),
 };
 
+/// Kata waktu pembayaran kasbon → jumlah hari sejak transaksi.
+const Map<String, int> dueWords = {'besok': 1, 'lusa': 2};
+
+/// Kata kerja janji bayar yang menempel pada kata waktu.
+const Set<String> payVerbs = {'bayar', 'dibayar', 'lunas', 'dilunasi'};
+
+/// Dua kata waktu pembayaran: "minggu depan", "bulan depan".
+const Map<(String, String), int> duePhrases = {
+  ('minggu', 'depan'): 7,
+  ('pekan', 'depan'): 7,
+  ('bulan', 'depan'): 30,
+};
+
 /// Kata sambung yang tidak membawa makna untuk parsing dan aman dibuang.
 const Set<String> fillerWords = {
   'yang',

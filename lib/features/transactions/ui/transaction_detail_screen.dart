@@ -10,6 +10,7 @@ import '../../../core/format.dart';
 import '../../../core/transaction_kind.dart';
 import '../../contacts/contacts_providers.dart';
 import '../../debts/debts_providers.dart';
+import '../../debts/due_label.dart';
 import '../../debts/ui/payment_dialog.dart';
 import '../../stores/stores_providers.dart';
 import '../domain/receipt.dart';
@@ -298,6 +299,26 @@ class _PaymentsSection extends ConsumerWidget {
   final TxRecord record;
   const _PaymentsSection({required this.record});
 
+  Future<void> _editDue(BuildContext context, WidgetRef ref) async {
+    final now = DateTime.now();
+    final start = record.occurredAt.isBefore(now) ? record.occurredAt : now;
+    final picked = await showDatePicker(
+      context: context,
+      firstDate: DateTime(start.year, start.month, start.day),
+      lastDate: now.add(const Duration(days: 366)),
+      initialDate: record.dueAt ?? now.add(const Duration(days: 7)),
+      helpText: 'Jatuh tempo',
+    );
+    if (picked == null) return;
+    await ref.read(debtRepositoryProvider).setDueDate(record.id, picked);
+    ref.read(dataRevisionProvider.notifier).bump();
+  }
+
+  Future<void> _clearDue(WidgetRef ref) async {
+    await ref.read(debtRepositoryProvider).setDueDate(record.id, null);
+    ref.read(dataRevisionProvider.notifier).bump();
+  }
+
   Future<void> _deletePayment(
     BuildContext context,
     WidgetRef ref,
@@ -377,6 +398,44 @@ class _PaymentsSection extends ConsumerWidget {
               '${formatRupiah(record.totalAmount)}',
               style: theme.textTheme.bodySmall,
             ),
+            if (unpaid) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(
+                    Icons.event,
+                    size: 18,
+                    color: record.isOverdue(DateTime.now())
+                        ? theme.colorScheme.error
+                        : null,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      record.dueAt == null
+                          ? 'Tanpa jatuh tempo'
+                          : '${formatShortDate(record.dueAt!)} · '
+                                '${dueLabel(record.dueAt!, DateTime.now())}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: record.isOverdue(DateTime.now())
+                            ? theme.colorScheme.error
+                            : null,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => _editDue(context, ref),
+                    child: Text(record.dueAt == null ? 'Atur' : 'Ubah'),
+                  ),
+                  if (record.dueAt != null)
+                    IconButton(
+                      tooltip: 'Hapus jatuh tempo',
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: () => _clearDue(ref),
+                    ),
+                ],
+              ),
+            ],
             for (final payment in payments)
               ListTile(
                 contentPadding: EdgeInsets.zero,

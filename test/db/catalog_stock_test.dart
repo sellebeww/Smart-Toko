@@ -298,7 +298,7 @@ void main() {
       await deleteDatabase(path);
 
       // Naik langsung dari v1 ke versi terbaru melewati semua migrasi.
-      expect(schemaVersion, 5);
+      expect(schemaVersion, 6);
       expect(store.single['owner_uid'], isNull);
       expect(store.single.containsKey('address'), isTrue);
       expect(tables.map((t) => t['name']), isNot(contains('pending_sync')));
