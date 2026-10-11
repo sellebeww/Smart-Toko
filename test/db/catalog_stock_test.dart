@@ -287,7 +287,7 @@ void main() {
       await upgraded.open(overridePath: path);
       final rows = await upgraded.db.query(
         'transactions',
-        columns: ['id', 'category', 'recorded_by'],
+        columns: ['id', 'category', 'recorded_by', 'on_credit'],
         orderBy: 'id',
       );
       final store = await upgraded.db.query('stores');
@@ -298,13 +298,16 @@ void main() {
       await deleteDatabase(path);
 
       // Naik langsung dari v1 ke versi terbaru melewati semua migrasi.
-      expect(schemaVersion, 4);
+      expect(schemaVersion, 5);
       expect(store.single['owner_uid'], isNull);
       expect(store.single.containsKey('address'), isTrue);
       expect(tables.map((t) => t['name']), isNot(contains('pending_sync')));
       expect(rows[0]['category'], 'penjualan');
       expect(rows[1]['category'], 'pengeluaran');
       expect(rows[0]['recorded_by'], isNull);
+      // Transaksi lama tetap tunai setelah fitur utang/piutang ada.
+      expect(rows.map((r) => r['on_credit']), [0, 0]);
+      expect(tables.map((t) => t['name']), contains('debt_payments'));
     });
   });
 }

@@ -62,6 +62,14 @@ class TxRecord {
   final int totalAmount;
   final String? contactId;
 
+  /// Dicatat belum dibayar (kasbon). Pemasukan = piutang pelanggan,
+  /// pengeluaran = utang ke supplier.
+  final bool onCredit;
+
+  /// Jumlah yang sudah dibayar sejauh ini. Hanya bermakna bila [onCredit];
+  /// diisi dari tabel pembayaran saat dibaca, bukan disimpan di baris ini.
+  final int paidAmount;
+
   /// Email akun yang mencatat; kosong untuk catatan sebelum kolom ini ada.
   final String? recordedBy;
   final DateTime createdAt;
@@ -81,8 +89,16 @@ class TxRecord {
     required this.items,
     this.note,
     this.contactId,
+    this.onCredit = false,
+    this.paidAmount = 0,
     this.recordedBy,
   });
+
+  /// Sisa yang belum dibayar; 0 untuk transaksi tunai atau yang sudah lunas.
+  int get outstanding =>
+      onCredit ? (totalAmount - paidAmount).clamp(0, totalAmount) : 0;
+
+  bool get isUnpaid => outstanding > 0;
 
   Map<String, Object?> toRow() => {
     'id': id,
@@ -94,6 +110,7 @@ class TxRecord {
     'source': source.name,
     'total_amount': totalAmount,
     'contact_id': contactId,
+    'on_credit': onCredit ? 1 : 0,
     'recorded_by': recordedBy,
     'created_at': createdAt.millisecondsSinceEpoch,
     'updated_at': updatedAt.millisecondsSinceEpoch,
@@ -102,6 +119,7 @@ class TxRecord {
   factory TxRecord.fromRow(
     Map<String, Object?> row, {
     List<TxItemRecord> items = const [],
+    int paidAmount = 0,
   }) {
     final direction = TxDirection.fromName(row['direction'] as String?)!;
     return TxRecord(
@@ -118,6 +136,8 @@ class TxRecord {
       source: TxSource.fromName(row['source']! as String),
       totalAmount: (row['total_amount']! as num).toInt(),
       contactId: row['contact_id'] as String?,
+      onCredit: ((row['on_credit'] as num?) ?? 0) != 0,
+      paidAmount: paidAmount,
       recordedBy: row['recorded_by'] as String?,
       createdAt: DateTime.fromMillisecondsSinceEpoch(
         (row['created_at']! as num).toInt(),

@@ -30,6 +30,8 @@ import '../../verification/domain/verification_status.dart';
 import '../../voice_capture/capture_controller.dart';
 import '../../voice_capture/speech_service.dart';
 import '../../catalog/ui/catalog_screen.dart';
+import '../../debts/debts_providers.dart';
+import '../../debts/ui/debts_screen.dart';
 import '../../contacts/contacts_providers.dart';
 import '../../contacts/ui/contacts_screen.dart';
 import '../../reports/reports_providers.dart';
@@ -215,6 +217,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     ),
                   ),
                   SliverToBoxAdapter(child: _QuickAccess(enabled: !capturing)),
+                  SliverToBoxAdapter(child: _DebtAlert(enabled: !capturing)),
                   SliverToBoxAdapter(
                     child: _LowStockAlert(enabled: !capturing),
                   ),
@@ -607,6 +610,44 @@ class _LowStockAlert extends ConsumerWidget {
                   builder: (_) =>
                       const CatalogScreen(initialKind: ProductKind.bahan),
                 ),
+              )
+            : null,
+      ),
+    );
+  }
+}
+
+/// Ringkasan utang/piutang. Hanya muncul bila ada yang belum lunas.
+class _DebtAlert extends ConsumerWidget {
+  final bool enabled;
+  const _DebtAlert({required this.enabled});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final totals = ref.watch(debtTotalsProvider).value;
+    if (totals == null || totals.isEmpty) return const SizedBox.shrink();
+    final parts = [
+      if (totals.receivable > 0) 'Ditagih ${formatRupiah(totals.receivable)}',
+      if (totals.payable > 0) 'Dibayar ${formatRupiah(totals.payable)}',
+    ];
+    return Card(
+      margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      color: const Color(0xFFFFF1DF),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        leading: const Icon(Icons.handshake_outlined, color: Color(0xFFAD642C)),
+        title: const Text(
+          'Utang & piutang',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+        subtitle: Text(
+          parts.join(' · '),
+          style: const TextStyle(fontSize: 12, color: Color(0xFFAD642C)),
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: enabled
+            ? () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const DebtsScreen()),
               )
             : null,
       ),

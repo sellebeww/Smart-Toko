@@ -7,7 +7,7 @@ library;
 
 import 'package:sqflite/sqflite.dart';
 
-const int schemaVersion = 4;
+const int schemaVersion = 5;
 
 class Migration {
   final int version;
@@ -200,5 +200,24 @@ const List<Migration> migrations = [
     'ALTER TABLE stores ADD COLUMN rejection_reason TEXT',
     'CREATE INDEX idx_stores_owner ON stores(owner_uid)',
     'DROP TABLE IF EXISTS pending_sync',
+  ]),
+  // Utang/piutang: transaksi bisa dicatat belum dibayar (on_credit), lalu
+  // dilunasi bertahap lewat debt_payments. Sisa = total - jumlah pembayaran.
+  // Baris lama tetap on_credit = 0 (tunai), jadi tidak ada yang berubah.
+  Migration(5, [
+    'ALTER TABLE transactions ADD COLUMN on_credit INTEGER NOT NULL DEFAULT 0',
+    '''
+    CREATE TABLE debt_payments (
+      id TEXT PRIMARY KEY,
+      store_id TEXT NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+      transaction_id TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+      amount INTEGER NOT NULL CHECK (amount > 0),
+      paid_at INTEGER NOT NULL,
+      note TEXT,
+      created_at INTEGER NOT NULL
+    )
+    ''',
+    'CREATE INDEX idx_debt_payments_tx ON debt_payments(transaction_id)',
+    'CREATE INDEX idx_transactions_credit ON transactions(store_id, on_credit)',
   ]),
 ];

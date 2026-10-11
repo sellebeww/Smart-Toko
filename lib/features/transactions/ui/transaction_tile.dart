@@ -120,6 +120,10 @@ class TransactionTile extends StatelessWidget {
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
+                        if (record.onCredit) ...[
+                          const SizedBox(height: 4),
+                          _CreditBadge(record: record),
+                        ],
                         if (compact) ...[const SizedBox(height: 8), value],
                       ],
                     ),
@@ -137,6 +141,35 @@ class TransactionTile extends StatelessWidget {
               );
             },
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "Belum lunas · sisa Rp 40.000" atau "Lunas" untuk transaksi kasbon.
+class _CreditBadge extends StatelessWidget {
+  final TxRecord record;
+  const _CreditBadge({required this.record});
+
+  @override
+  Widget build(BuildContext context) {
+    final unpaid = record.isUnpaid;
+    final label = unpaid
+        ? 'Belum lunas · sisa ${formatRupiah(record.outstanding)}'
+        : 'Lunas';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: unpaid ? const Color(0xFFFFF1DF) : const Color(0xFFE8F2E9),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: unpaid ? const Color(0xFFAD642C) : const Color(0xFF176448),
         ),
       ),
     );

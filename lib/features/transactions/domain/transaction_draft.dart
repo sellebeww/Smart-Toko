@@ -143,8 +143,13 @@ class TransactionDraft {
   final String? note;
   final TxSource source;
 
-  /// Pelanggan (untuk penjualan) atau supplier (untuk pembelian), opsional.
+  /// Pelanggan (untuk penjualan) atau supplier (untuk pembelian). Opsional,
+  /// kecuali transaksinya dicatat belum dibayar ([isCredit]).
   final String? contactId;
+
+  /// Pengguna menandai transaksi ini belum dibayar (kasbon). Hanya berlaku
+  /// untuk penjualan dan pembelian; lihat [isCredit].
+  final bool onCredit;
 
   /// Transkrip asli, disimpan hanya untuk ditampilkan saat konfirmasi.
   final String? transcript;
@@ -157,6 +162,7 @@ class TransactionDraft {
     this.category = const DraftField<TxCategory>.empty(),
     this.note,
     this.contactId,
+    this.onCredit = false,
     this.transcript,
   });
 
@@ -188,6 +194,7 @@ class TransactionDraft {
           ],
     occurredAt: occurredAt ?? DateTime.now(),
     source: source,
+    onCredit: result.onCredit,
     transcript: result.transcript,
   );
 
@@ -223,6 +230,7 @@ class TransactionDraft {
     note: record.note,
     source: record.source,
     contactId: record.contactId,
+    onCredit: record.onCredit,
   );
 
   /// Kategori yang akan disimpan. Kategori yang tidak searah dengan arah
@@ -234,6 +242,13 @@ class TransactionDraft {
     if (chosen != null && chosen.direction == dir) return chosen;
     return TxCategory.defaultFor(dir);
   }
+
+  /// Belum dibayar yang benar-benar berlaku: hanya jual-beli barang yang
+  /// lazim dikasbon. Pemasukan lain dan pengeluaran operasional selalu tunai.
+  bool get isCredit => switch (effectiveCategory) {
+    TxCategory.penjualan || TxCategory.pembelian => onCredit,
+    _ => false,
+  };
 
   int get total {
     var sum = 0;
@@ -247,7 +262,9 @@ class TransactionDraft {
   bool get isComplete =>
       direction.isPresent &&
       items.isNotEmpty &&
-      items.every((item) => item.isComplete);
+      items.every((item) => item.isComplete) &&
+      // Utang tanpa nama tidak bisa ditagih.
+      (!isCredit || contactId != null);
 
   /// Field yang perlu diperiksa pengguna, dipakai layar konfirmasi untuk
   /// menentukan sorotan dan urutan fokus.
@@ -261,6 +278,7 @@ class TransactionDraft {
     DateTime? occurredAt,
     String? note,
     Object? contactId = _keep,
+    bool? onCredit,
   }) => TransactionDraft(
     direction: direction ?? this.direction,
     category: category ?? this.category,
@@ -270,6 +288,7 @@ class TransactionDraft {
     contactId: identical(contactId, _keep)
         ? this.contactId
         : contactId as String?,
+    onCredit: onCredit ?? this.onCredit,
     source: source,
     transcript: transcript,
   );

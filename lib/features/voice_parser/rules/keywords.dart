@@ -188,6 +188,30 @@ const Set<String> itemSeparators = {
   'trus',
 };
 
+/// Kata yang menandakan transaksi dicatat belum dibayar (kasbon).
+const Set<String> creditWords = {
+  'utang',
+  'utangnya',
+  'ngutang',
+  'berutang',
+  'hutang',
+  'hutangnya',
+  'ngehutang',
+  'berhutang',
+  'kasbon',
+  'ngebon',
+  'kredit',
+};
+
+/// Dua kata berurutan yang juga berarti kasbon, mis. "belum bayar".
+const Set<(String, String)> creditPhrases = {
+  ('belum', 'bayar'),
+  ('belum', 'lunas'),
+  ('nanti', 'bayar'),
+  ('bayar', 'nanti'),
+  ('bayar', 'besok'),
+};
+
 /// Kata sambung yang tidak membawa makna untuk parsing dan aman dibuang.
 const Set<String> fillerWords = {
   'yang',

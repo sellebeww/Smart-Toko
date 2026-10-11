@@ -25,6 +25,8 @@ const List<String> transactionsHeader = [
   'Satuan',
   'Kategori',
   'Pelanggan/Supplier',
+  'Status Bayar',
+  'Sisa Belum Dibayar',
 ];
 
 const List<String> dailySummaryHeader = [
@@ -99,7 +101,17 @@ List<int> buildTransactionsWorkbook(
             ),
           ]
         : record.items;
+    final status = !record.onCredit
+        ? 'Tunai'
+        : record.isUnpaid
+        ? 'Belum lunas'
+        : 'Lunas';
+    var firstRow = true;
     for (final item in items) {
+      // Sisa ditulis di baris pertama transaksi saja, supaya menjumlahkan
+      // kolom ini tidak menghitung satu kasbon berkali-kali.
+      final remaining = firstRow && record.isUnpaid ? record.outstanding : null;
+      firstRow = false;
       _writeRow(tx, row++, [
         (TextCellValue(formatIsoDate(record.occurredAt)), null),
         (TextCellValue(formatTime(record.occurredAt)), null),
@@ -119,6 +131,10 @@ List<int> buildTransactionsWorkbook(
           ),
           null,
         ),
+        (TextCellValue(status), null),
+        remaining == null
+            ? (TextCellValue(''), null)
+            : (IntCellValue(remaining), _money),
       ]);
     }
   }

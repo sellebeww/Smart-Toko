@@ -58,6 +58,7 @@ class RuleBasedParser {
 
     final consumed = List<bool>.filled(tokens.length, false);
 
+    final onCredit = _consumeCreditWords(tokens, consumed);
     final direction = _findDirection(tokens, consumed, sttConfidence);
     final segments = _splitSegments(tokens, consumed);
 
@@ -99,7 +100,26 @@ class RuleBasedParser {
       items: items,
       totalAmount: totalAmount,
       unmatchedTokens: unmatched,
+      onCredit: onCredit,
     );
+  }
+
+  /// Menandai kata kasbon sebagai terpakai supaya tidak jadi nama barang
+  /// atau token tak dikenal. Mengembalikan true bila ada yang ditemukan.
+  bool _consumeCreditWords(List<String> tokens, List<bool> consumed) {
+    var found = false;
+    for (var i = 0; i < tokens.length; i++) {
+      if (creditWords.contains(tokens[i])) {
+        consumed[i] = true;
+        found = true;
+      } else if (i + 1 < tokens.length &&
+          creditPhrases.contains((tokens[i], tokens[i + 1]))) {
+        consumed[i] = true;
+        consumed[i + 1] = true;
+        found = true;
+      }
+    }
+    return found;
   }
 
   /// Kategori diturunkan dari kata kerja arah, lalu dikoreksi oleh bendanya:

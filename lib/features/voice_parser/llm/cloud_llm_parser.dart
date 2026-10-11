@@ -128,6 +128,9 @@ class CloudLlmParser implements LlmParser {
       items: items,
       totalAmount: const ParsedField.missing(),
       unmatchedTokens: const [],
+      // Server AI tidak diminta mengenali kasbon; petunjuk dari parser
+      // lokal tetap dipakai.
+      onCredit: ruleResult.onCredit,
     );
   }
 }

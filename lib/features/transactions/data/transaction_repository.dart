@@ -47,8 +47,29 @@ class TransactionRepository {
     String? recordedBy,
   }) {
     return database.db.transaction((txn) async {
+      // Pembayaran utang menempel ke id transaksi, dan koreksi membuat id
+      // baru; tanpa dipindahkan, CASCADE akan menghapus riwayat pembayaran.
+      final payments = await txn.query(
+        'debt_payments',
+        where: 'transaction_id = ?',
+        whereArgs: [oldId],
+      );
       await txn.delete('transactions', where: 'id = ?', whereArgs: [oldId]);
-      return _insert(txn, confirmed, storeId: storeId, recordedBy: recordedBy);
+      final record = await _insert(
+        txn,
+        confirmed,
+        storeId: storeId,
+        recordedBy: recordedBy,
+      );
+      if (record.onCredit) {
+        for (final payment in payments) {
+          await txn.insert('debt_payments', {
+            ...payment,
+            'transaction_id': record.id,
+          });
+        }
+      }
+      return record.onCredit ? _withPaid(txn, record) : record;
     });
   }
 
@@ -112,6 +133,7 @@ class TransactionRepository {
       source: draft.source,
       totalAmount: draft.total,
       contactId: draft.contactId,
+      onCredit: draft.isCredit,
       recordedBy: recordedBy,
       createdAt: now,
       updatedAt: now,
@@ -214,10 +236,62 @@ class TransactionRepository {
       }
     }
 
+    final paidByTx = await _paidAmounts(database.db, ids);
     return [
       for (final row in rows)
-        TxRecord.fromRow(row, items: itemsByTx[row['id']] ?? const []),
+        TxRecord.fromRow(
+          row,
+          items: itemsByTx[row['id']] ?? const [],
+          paidAmount: paidByTx[row['id']] ?? 0,
+        ),
     ];
+  }
+
+  static Future<Map<String, int>> _paidAmounts(
+    DatabaseExecutor db,
+    List<String> ids,
+  ) async {
+    final paid = <String, int>{};
+    for (var start = 0; start < ids.length; start += 500) {
+      final chunk = ids.sublist(
+        start,
+        start + 500 > ids.length ? ids.length : start + 500,
+      );
+      final rows = await db.rawQuery(
+        'SELECT transaction_id AS id, SUM(amount) AS paid FROM debt_payments '
+        'WHERE transaction_id IN (${List.filled(chunk.length, '?').join(',')}) '
+        'GROUP BY transaction_id',
+        chunk,
+      );
+      for (final row in rows) {
+        paid[row['id']! as String] = (row['paid']! as num).toInt();
+      }
+    }
+    return paid;
+  }
+
+  static Future<TxRecord> _withPaid(
+    DatabaseExecutor db,
+    TxRecord record,
+  ) async {
+    final paid = (await _paidAmounts(db, [record.id]))[record.id] ?? 0;
+    return TxRecord(
+      id: record.id,
+      storeId: record.storeId,
+      direction: record.direction,
+      category: record.category,
+      occurredAt: record.occurredAt,
+      source: record.source,
+      totalAmount: record.totalAmount,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+      items: record.items,
+      note: record.note,
+      contactId: record.contactId,
+      onCredit: record.onCredit,
+      paidAmount: paid,
+      recordedBy: record.recordedBy,
+    );
   }
 
   /// Agregasi dikerjakan SQLite, bukan di Dart. Inilah alasan utama memilih

@@ -95,6 +95,10 @@ class ParseResult {
   /// bahwa aturan perlu diperbaiki, dan dasar pencatatan ke parse_failures.
   final List<String> unmatchedTokens;
 
+  /// Ucapan memuat kata kasbon ("ngutang", "belum bayar", ...). Hanya
+  /// petunjuk: draf tetap meminta pengguna memilih siapa yang berutang.
+  final bool onCredit;
+
   const ParseResult({
     required this.transcript,
     required this.parserVersion,
@@ -104,6 +108,7 @@ class ParseResult {
     required this.totalAmount,
     required this.unmatchedTokens,
     this.category = const ParsedField.missing(),
+    this.onCredit = false,
   });
 
   factory ParseResult.empty({
@@ -163,6 +168,7 @@ class ParseResult {
     List<ParsedItem>? items,
     ParsedField<int>? totalAmount,
     List<String>? unmatchedTokens,
+    bool? onCredit,
   }) => ParseResult(
     transcript: transcript,
     parserVersion: parserVersion,
@@ -172,6 +178,7 @@ class ParseResult {
     items: items ?? this.items,
     totalAmount: totalAmount ?? this.totalAmount,
     unmatchedTokens: unmatchedTokens ?? this.unmatchedTokens,
+    onCredit: onCredit ?? this.onCredit,
   );
 
   @override

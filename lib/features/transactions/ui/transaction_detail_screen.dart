@@ -8,6 +8,8 @@ import '../../../app/providers.dart';
 import '../../../core/format.dart';
 import '../../../core/transaction_kind.dart';
 import '../../contacts/contacts_providers.dart';
+import '../../debts/debts_providers.dart';
+import '../../debts/ui/payment_dialog.dart';
 import '../domain/transaction_draft.dart';
 import '../domain/transaction_record.dart';
 import 'transaction_editor.dart';
@@ -53,7 +55,8 @@ class TransactionDetailScreen extends ConsumerWidget {
           '${record.category.label} ${formatRupiah(record.totalAmount)} '
           'pada ${formatShortDate(record.occurredAt)} '
           '${formatTime(record.occurredAt)} akan dihapus.'
-          '${record.category == TxCategory.pembelian ? '\n\nStok dari pembelian ini ikut dibatalkan.' : ''}',
+          '${record.category == TxCategory.pembelian ? '\n\nStok dari pembelian ini ikut dibatalkan.' : ''}'
+          '${record.onCredit ? '\n\nRiwayat pembayarannya ikut terhapus.' : ''}',
         ),
         actions: [
           TextButton(
@@ -108,7 +111,7 @@ class TransactionDetailScreen extends ConsumerWidget {
   }
 }
 
-class _DetailBody extends StatelessWidget {
+class _DetailBody extends ConsumerWidget {
   final TxRecord record;
   final String? contactName;
   final VoidCallback onCorrect;
@@ -122,7 +125,7 @@ class _DetailBody extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final isIncome = record.direction == TxDirection.masuk;
     final color = isIncome
@@ -179,6 +182,10 @@ class _DetailBody extends StatelessWidget {
             ],
           ),
         ),
+        if (record.onCredit) ...[
+          const SizedBox(height: 16),
+          _PaymentsSection(record: record),
+        ],
         const SizedBox(height: 16),
         Text('Barang', style: theme.textTheme.titleSmall),
         const SizedBox(height: 4),
@@ -248,4 +255,124 @@ class _InfoRow extends StatelessWidget {
     title: Text(label, style: Theme.of(context).textTheme.labelMedium),
     subtitle: Text(value, style: Theme.of(context).textTheme.bodyLarge),
   );
+}
+
+/// Status kasbon, riwayat pembayaran, dan tombol mencatat pembayaran baru.
+class _PaymentsSection extends ConsumerWidget {
+  final TxRecord record;
+  const _PaymentsSection({required this.record});
+
+  Future<void> _deletePayment(
+    BuildContext context,
+    WidgetRef ref,
+    String paymentId,
+  ) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hapus pembayaran ini?'),
+        content: const Text('Sisa yang harus dibayar akan bertambah lagi.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await ref.read(debtRepositoryProvider).deletePayment(paymentId);
+    ref.read(dataRevisionProvider.notifier).bump();
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final payments =
+        ref.watch(debtPaymentsProvider(record.id)).value ?? const [];
+    final unpaid = record.isUnpaid;
+    final isReceivable = record.direction == TxDirection.masuk;
+    final progress = record.totalAmount == 0
+        ? 1.0
+        : (record.paidAmount / record.totalAmount).clamp(0.0, 1.0);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  unpaid ? Icons.hourglass_bottom : Icons.check_circle_outline,
+                  size: 20,
+                  color: unpaid
+                      ? const Color(0xFFAD642C)
+                      : theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    unpaid
+                        ? (isReceivable
+                              ? 'Belum dibayar pelanggan'
+                              : 'Utang ke supplier')
+                        : 'Lunas',
+                    style: theme.textTheme.titleSmall,
+                  ),
+                ),
+                if (unpaid)
+                  Text(
+                    'Sisa ${formatRupiah(record.outstanding)}',
+                    style: theme.textTheme.titleSmall,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            LinearProgressIndicator(value: progress, minHeight: 6),
+            const SizedBox(height: 6),
+            Text(
+              'Dibayar ${formatRupiah(record.paidAmount)} dari '
+              '${formatRupiah(record.totalAmount)}',
+              style: theme.textTheme.bodySmall,
+            ),
+            for (final payment in payments)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: Text(formatRupiah(payment.amount)),
+                subtitle: Text(
+                  [
+                    formatShortDate(payment.paidAt),
+                    if (payment.note != null) payment.note!,
+                  ].join(' · '),
+                ),
+                trailing: IconButton(
+                  tooltip: 'Hapus pembayaran',
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: () => _deletePayment(context, ref, payment.id),
+                ),
+              ),
+            if (unpaid) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () =>
+                      showPaymentDialog(context, ref, record: record),
+                  icon: const Icon(Icons.payments_outlined),
+                  label: const Text('Catat pembayaran'),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }

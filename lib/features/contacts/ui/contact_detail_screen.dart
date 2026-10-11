@@ -3,10 +3,15 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/providers.dart';
 import '../../../core/db/dao/contact_dao.dart';
 import '../../../core/format.dart';
+import '../../../core/transaction_kind.dart';
+import '../../debts/reminder.dart';
+import '../../stores/stores_providers.dart';
 import '../../transactions/domain/transaction_record.dart';
 import '../../transactions/ui/transaction_detail_screen.dart';
 import '../../transactions/ui/transaction_tile.dart';
@@ -36,11 +41,60 @@ class ContactDetailScreen extends ConsumerWidget {
 
   const ContactDetailScreen({super.key, required this.contactId});
 
+  /// Mengirim pengingat lewat WhatsApp bila nomornya valid; selain itu lewat
+  /// menu bagikan, supaya pengguna tetap bisa memilih aplikasi sendiri.
+  Future<void> _remind(
+    BuildContext context,
+    WidgetRef ref,
+    ContactRecord contact,
+    List<TxRecord> unpaid,
+  ) async {
+    final message = buildReminderMessage(
+      contactName: contact.name,
+      storeName: ref.read(activeStoreProvider).value?.name ?? 'toko kami',
+      outstanding: unpaid.fold(0, (sum, t) => sum + t.outstanding),
+      openCount: unpaid.length,
+      since: unpaid
+          .map((t) => t.occurredAt)
+          .reduce((a, b) => a.isBefore(b) ? a : b),
+    );
+    final link = whatsappLink(contact.phone, message);
+    var opened = false;
+    if (link != null) {
+      try {
+        opened = await launchUrl(link, mode: LaunchMode.externalApplication);
+      } catch (_) {
+        opened = false;
+      }
+    }
+    if (!opened) await SharePlus.instance.share(ShareParams(text: message));
+  }
+
   Future<void> _delete(
     BuildContext context,
     WidgetRef ref,
     ContactRecord contact,
+    int outstanding,
   ) async {
+    if (outstanding > 0) {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('${contact.name} belum lunas'),
+          content: Text(
+            'Masih ada sisa ${formatRupiah(outstanding)}. Lunasi dulu '
+            'sebelum menghapus nama ini, supaya catatan utangnya tidak hilang.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Mengerti'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -89,7 +143,12 @@ class ContactDetailScreen extends ConsumerWidget {
             IconButton(
               tooltip: 'Hapus',
               icon: const Icon(Icons.delete_outline),
-              onPressed: () => _delete(context, ref, data.contact),
+              onPressed: () => _delete(
+                context,
+                ref,
+                data.contact,
+                data.transactions.fold(0, (sum, t) => sum + t.outstanding),
+              ),
             ),
           ],
         ],
@@ -104,9 +163,56 @@ class ContactDetailScreen extends ConsumerWidget {
           final c = data.contact;
           final txs = data.transactions;
           final total = txs.fold<int>(0, (sum, t) => sum + t.totalAmount);
+          final unpaid = [
+            for (final t in txs)
+              if (t.isUnpaid) t,
+          ];
+          final owed = unpaid.fold<int>(0, (sum, t) => sum + t.outstanding);
           return ListView(
             padding: const EdgeInsets.symmetric(vertical: 8),
             children: [
+              if (owed > 0)
+                Card(
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
+                  color: const Color(0xFFFFF1DF),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          unpaid.first.direction == TxDirection.masuk
+                              ? 'Belum dibayar ${c.name}'
+                              : 'Utang ke ${c.name}',
+                          style: theme.textTheme.labelMedium,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          formatRupiah(owed),
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          '${unpaid.length} transaksi belum lunas. Buka '
+                          'transaksinya untuk mencatat pembayaran.',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        if (c.kind == ContactKind.pelanggan) ...[
+                          const SizedBox(height: 10),
+                          OutlinedButton.icon(
+                            onPressed: () => _remind(context, ref, c, unpaid),
+                            icon: const Icon(Icons.send_outlined),
+                            label: const Text('Kirim pengingat'),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
               Card(
                 margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 child: Column(

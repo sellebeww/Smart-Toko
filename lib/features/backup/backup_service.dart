@@ -32,6 +32,7 @@ const List<String> _tables = [
   'transactions',
   'transaction_items',
   'stock_movements',
+  'debt_payments',
 ];
 
 class BackupException implements Exception {
@@ -198,16 +199,18 @@ class BackupService {
            FROM contacts WHERE store_id = ?1) AS c,
         (SELECT COUNT(*) || ':' || COALESCE(MAX(created_at), 0) || ':' ||
                 COALESCE(SUM(qty_delta), 0)
-           FROM stock_movements WHERE store_id = ?1) AS s
+           FROM stock_movements WHERE store_id = ?1) AS s,
+        (SELECT COUNT(*) || ':' || COALESCE(SUM(amount), 0)
+           FROM debt_payments WHERE store_id = ?1) AS d
       ''',
       [storeId],
     );
     final row = rows.first;
-    return '${row['t']}|${row['p']}|${row['c']}|${row['s']}';
+    return '${row['t']}|${row['p']}|${row['c']}|${row['s']}|${row['d']}';
   }
 
   Future<bool> hasLocalData(String storeId) async =>
-      await fingerprint(storeId) != '0:0:0|0:0:0|0:0|0:0:0';
+      await fingerprint(storeId) != '0:0:0|0:0:0|0:0|0:0:0|0:0';
 
   Future<DateTime?> lastBackupAt(String storeId) async {
     final raw = await _settings.getString(SettingsKeys.lastBackupAt(storeId));
@@ -307,6 +310,8 @@ class BackupService {
     if (tables is! Map<String, dynamic>) {
       throw const BackupException('Berkas cadangan rusak atau tidak dikenali.');
     }
+    // Cadangan dari sebelum fitur utang/piutang belum punya tabel ini.
+    if (version < 5) tables.putIfAbsent('debt_payments', () => <Object?>[]);
     _validateTables(tables, storeId);
 
     var restored = 0;
@@ -387,6 +392,9 @@ class BackupService {
     for (final row in tables['transaction_items'] as List) {
       reference(row as Map, 'transaction_id', 'transactions', required: true);
       reference(row, 'product_id', 'products');
+    }
+    for (final row in tables['debt_payments'] as List) {
+      reference(row as Map, 'transaction_id', 'transactions', required: true);
     }
     for (final row in tables['stock_movements'] as List) {
       reference(row as Map, 'product_id', 'products', required: true);

@@ -108,6 +108,13 @@ class _ConfirmationSheetState extends State<ConfirmationSheet> {
     });
   }
 
+  void _setOnCredit(bool value) {
+    setState(() {
+      _editedFields.add('credit');
+      _draft = _draft.copyWith(onCredit: value);
+    });
+  }
+
   void _clearContact() {
     setState(() {
       _editedFields.add('contact');
@@ -282,8 +289,16 @@ class _ConfirmationSheetState extends State<ConfirmationSheet> {
                           _ContactRow(
                             kind: kind,
                             name: _contactName,
+                            required: _draft.isCredit,
                             onPick: () => _pickContact(kind),
                             onClear: _clearContact,
+                          ),
+                          _CreditToggle(
+                            kind: kind,
+                            value: _draft.onCredit,
+                            missingContact:
+                                _draft.isCredit && _draft.contactId == null,
+                            onChanged: _setOnCredit,
                           ),
                         ],
                       const SizedBox(height: 20),
@@ -466,12 +481,14 @@ class _CategorySelector extends StatelessWidget {
 class _ContactRow extends StatelessWidget {
   final ContactKind kind;
   final String? name;
+  final bool required;
   final VoidCallback onPick;
   final VoidCallback onClear;
 
   const _ContactRow({
     required this.kind,
     required this.name,
+    required this.required,
     required this.onPick,
     required this.onClear,
   });
@@ -489,7 +506,11 @@ class _ContactRow extends StatelessWidget {
                 ? Icons.person_add_alt
                 : Icons.local_shipping_outlined,
           ),
-          label: Text('${kind.label} (opsional)'),
+          label: Text(
+            required
+                ? 'Pilih ${kind.label.toLowerCase()}'
+                : '${kind.label} (opsional)',
+          ),
         ),
       );
     }
@@ -506,6 +527,46 @@ class _ContactRow extends StatelessWidget {
         onPressed: onPick,
         onDeleted: onClear,
         deleteButtonTooltipMessage: 'Lepas ${kind.label.toLowerCase()}',
+      ),
+    );
+  }
+}
+
+/// Penanda transaksi belum dibayar. Bila menyala, nama pelanggan/supplier
+/// wajib dipilih supaya sisanya bisa ditagih.
+class _CreditToggle extends StatelessWidget {
+  final ContactKind kind;
+  final bool value;
+  final bool missingContact;
+  final ValueChanged<bool> onChanged;
+
+  const _CreditToggle({
+    required this.kind,
+    required this.value,
+    required this.missingContact,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      value: value,
+      onChanged: onChanged,
+      title: Text(
+        kind == ContactKind.pelanggan
+            ? 'Belum dibayar (kasbon pelanggan)'
+            : 'Belum dibayar (utang ke supplier)',
+      ),
+      subtitle: Text(
+        missingContact
+            ? 'Pilih ${kind.label.toLowerCase()} dulu supaya bisa ditagih.'
+            : 'Bisa dicicil dan dilunasi nanti dari detail transaksi.',
+        style: missingContact
+            ? TextStyle(color: theme.colorScheme.error, fontSize: 12)
+            : const TextStyle(fontSize: 12),
       ),
     );
   }
