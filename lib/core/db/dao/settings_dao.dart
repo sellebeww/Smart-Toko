@@ -27,6 +27,7 @@ class SettingsKeys {
   static const String appLockSalt = 'app_lock_salt';
   static const String appLockFailed = 'app_lock_failed';
   static const String appLockBlockedUntil = 'app_lock_blocked_until';
+  static const String appLockBiometric = 'app_lock_biometric';
   static const String onboardingDone = 'onboarding_done';
   static const String activeStoreId = 'active_store_id';
 

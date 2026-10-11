@@ -191,6 +191,25 @@ class _AppLockTiles extends ConsumerWidget {
             'orang yang meminjam HP-mu.',
           ),
         ),
+        if (enabled && (ref.watch(biometricAvailableProvider).value ?? false))
+          SwitchListTile(
+            value:
+                ref.watch(appLockControllerProvider).value?.biometric ?? false,
+            onChanged: (on) async {
+              final ok = await ref
+                  .read(appLockControllerProvider.notifier)
+                  .setBiometric(on);
+              if (!ok && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Sidik jari/wajah tidak terverifikasi.'),
+                  ),
+                );
+              }
+            },
+            title: const Text('Buka dengan sidik jari / wajah'),
+            subtitle: const Text('PIN tetap bisa dipakai bila sensor gagal.'),
+          ),
         if (enabled)
           ListTile(
             title: const Text('Ubah PIN'),

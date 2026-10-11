@@ -102,9 +102,34 @@ class _LockScreenState extends ConsumerState<LockScreen> {
   bool _checking = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Sekali tiap terkunci. Bila dibatalkan, tombolnya tetap ada; dialog
+    // tidak dipaksakan berulang.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (ref.read(appLockControllerProvider).value?.biometric ?? false) {
+        _biometric();
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _pin.dispose();
     super.dispose();
+  }
+
+  Future<void> _biometric() async {
+    if (_checking) return;
+    setState(() => _checking = true);
+    final ok = await ref
+        .read(appLockControllerProvider.notifier)
+        .unlockWithBiometric();
+    if (!mounted) return;
+    setState(() {
+      _checking = false;
+      if (!ok) _error = null;
+    });
   }
 
   Future<void> _submit() async {
@@ -219,6 +244,13 @@ class _LockScreenState extends ConsumerState<LockScreen> {
                       child: const Text('Buka'),
                     ),
                   ),
+                  if (ref.watch(appLockControllerProvider).value?.biometric ??
+                      false)
+                    TextButton.icon(
+                      onPressed: _checking ? null : _biometric,
+                      icon: const Icon(Icons.fingerprint),
+                      label: const Text('Pakai sidik jari / wajah'),
+                    ),
                   TextButton(
                     onPressed: _forgot,
                     child: const Text('Lupa PIN? Keluar dari akun'),

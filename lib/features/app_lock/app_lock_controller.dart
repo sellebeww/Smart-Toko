@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
 import '../../core/db/dao/settings_dao.dart';
+import 'biometric_auth.dart';
 import 'pin_hasher.dart';
 
 /// Percobaan salah beruntun sebelum pengguna harus menunggu.
@@ -26,15 +27,46 @@ class AppLockState {
   final bool locked;
   final DateTime? blockedUntil;
 
+  /// Sidik jari/wajah boleh dipakai membuka kunci (PIN tetap berlaku).
+  final bool biometric;
+
   const AppLockState({
     required this.enabled,
     required this.locked,
     this.blockedUntil,
+    this.biometric = false,
   });
 
   bool isBlocked(DateTime now) =>
       blockedUntil != null && now.isBefore(blockedUntil!);
+
+  AppLockState copyWith({
+    bool? enabled,
+    bool? locked,
+    Object? blockedUntil = _keep,
+    bool? biometric,
+  }) => AppLockState(
+    enabled: enabled ?? this.enabled,
+    locked: locked ?? this.locked,
+    blockedUntil: identical(blockedUntil, _keep)
+        ? this.blockedUntil
+        : blockedUntil as DateTime?,
+    biometric: biometric ?? this.biometric,
+  );
 }
+
+const Object _keep = Object();
+
+final biometricAuthProvider = Provider<BiometricAuth>(
+  (ref) => LocalBiometricAuth(),
+);
+
+/// Sensor tersedia dan sudah didaftarkan di HP ini.
+final biometricAvailableProvider = FutureProvider<bool>(
+  (ref) => ref.watch(biometricAuthProvider).isAvailable(),
+);
+
+const String biometricReason = 'Buka SmartToko';
 
 final appLockClockProvider = Provider<DateTime Function()>(
   (ref) => DateTime.now,
@@ -55,6 +87,8 @@ class AppLockController extends AsyncNotifier<AppLockState> {
       // Terkunci sejak aplikasi dibuka.
       locked: enabled,
       blockedUntil: enabled ? await _readBlockedUntil() : null,
+      biometric:
+          enabled && await settings.getFlag(SettingsKeys.appLockBiometric),
     );
   }
 
@@ -111,7 +145,7 @@ class AppLockController extends AsyncNotifier<AppLockState> {
   Future<UnlockResult> unlock(String pin) async {
     final result = await _attempt(pin);
     if (result == UnlockResult.success) {
-      state = AsyncData(const AppLockState(enabled: true, locked: false));
+      state = AsyncData(_current.copyWith(locked: false, blockedUntil: null));
     }
     return result;
   }
@@ -127,7 +161,39 @@ class AppLockController extends AsyncNotifier<AppLockState> {
     );
     await _settings.remove(SettingsKeys.appLockFailed);
     await _settings.remove(SettingsKeys.appLockBlockedUntil);
-    state = const AsyncData(AppLockState(enabled: true, locked: false));
+    state = AsyncData(
+      AppLockState(enabled: true, locked: false, biometric: _current.biometric),
+    );
+  }
+
+  /// Menyalakan/mematikan biometrik. Menyalakan butuh satu kali pemindaian
+  /// berhasil, supaya yang menyalakan memang pemilik sidik jari di HP ini.
+  Future<bool> setBiometric(bool on) async {
+    if (on) {
+      if (!_current.enabled) return false;
+      final auth = ref.read(biometricAuthProvider);
+      if (!await auth.isAvailable()) return false;
+      if (!await auth.authenticate(biometricReason)) return false;
+      await _settings.setFlag(SettingsKeys.appLockBiometric, value: true);
+    } else {
+      await _settings.remove(SettingsKeys.appLockBiometric);
+    }
+    state = AsyncData(_current.copyWith(biometric: on));
+    return true;
+  }
+
+  /// Membuka kunci dengan sidik jari/wajah. Berhasil juga menghapus blokir
+  /// percobaan PIN salah: pemilik sensor sudah terbukti.
+  Future<bool> unlockWithBiometric() async {
+    final current = _current;
+    if (!current.enabled || !current.biometric) return false;
+    if (!await ref.read(biometricAuthProvider).authenticate(biometricReason)) {
+      return false;
+    }
+    await _settings.remove(SettingsKeys.appLockFailed);
+    await _settings.remove(SettingsKeys.appLockBlockedUntil);
+    state = AsyncData(current.copyWith(locked: false, blockedUntil: null));
+    return true;
   }
 
   /// Mematikan kunci; PIN saat ini harus benar.
@@ -147,13 +213,7 @@ class AppLockController extends AsyncNotifier<AppLockState> {
   void lock() {
     final current = _current;
     if (current.enabled && !current.locked) {
-      state = AsyncData(
-        AppLockState(
-          enabled: true,
-          locked: true,
-          blockedUntil: current.blockedUntil,
-        ),
-      );
+      state = AsyncData(current.copyWith(locked: true));
     }
   }
 
@@ -165,6 +225,7 @@ class AppLockController extends AsyncNotifier<AppLockState> {
       SettingsKeys.appLockSalt,
       SettingsKeys.appLockFailed,
       SettingsKeys.appLockBlockedUntil,
+      SettingsKeys.appLockBiometric,
     ]) {
       await _settings.remove(key);
     }
@@ -173,8 +234,7 @@ class AppLockController extends AsyncNotifier<AppLockState> {
 }
 
 extension on AppLockState {
-  AppLockState copyWithBlocked(DateTime until) =>
-      AppLockState(enabled: enabled, locked: locked, blockedUntil: until);
+  AppLockState copyWithBlocked(DateTime until) => copyWith(blockedUntil: until);
 }
 
 final appLockControllerProvider =

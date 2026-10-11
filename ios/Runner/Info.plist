@@ -6,6 +6,8 @@
 	<string>Kamera digunakan untuk mengambil foto verifikasi toko setelah kamu menyetujuinya.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Pilih foto dari galeri untuk pengajuan verifikasi toko.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Face ID dipakai untuk membuka kunci SmartToko bila kamu menyalakannya di Pengaturan.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Mikrofon digunakan saat kamu menekan tombol rekam transaksi.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
