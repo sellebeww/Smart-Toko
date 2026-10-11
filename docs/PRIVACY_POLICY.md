@@ -28,12 +28,24 @@ toko** (nama, kategori, alamat) di server.
 
 | Fitur | Data yang dikirim | Tujuan | Ke mana |
 |---|---|---|---|
-| Cadangan cloud | Salinan transaksi, barang, stok, dan kontak toko | Memulihkan data bila HP hilang atau diganti | Server SmartToko (Supabase). Hanya akunmu yang bisa membukanya |
+| Cadangan cloud | Salinan transaksi, barang, stok, kontak, dan catatan utang/piutang toko | Memulihkan data bila HP hilang atau diganti | Server SmartToko (Supabase). Hanya akunmu yang bisa membukanya |
 | Verifikasi toko | Foto KTP, foto toko, selfie memegang KTP, dan NIB bila ada | Memastikan toko nyata | Server SmartToko. Hanya kamu dan admin peninjau yang bisa membukanya. Tidak dipakai untuk tujuan lain |
 | Bantuan AI | Kalimat yang kamu ucapkan, hanya saat pengurai di HP gagal | Mengurai ucapan sulit menjadi draf transaksi | Server SmartToko lalu Anthropic (penyedia model AI). Hasilnya tetap kamu periksa sebelum disimpan |
 | Laporan error | Jenis error, pesan dan jejak yang dipotong (email dan angka panjang dibuang), versi aplikasi, jenis HP | Memperbaiki bug | Server SmartToko. Tanpa data transaksi, nama, atau kontak |
 
 Kamu bisa mematikan tiap fitur di **Pengaturan** kapan saja.
+
+## Kunci PIN
+
+PIN hanya tersimpan di HP-mu dalam bentuk hash; tidak pernah dikirim ke
+server. Bila lupa PIN, keluar dari akun menghapus kunci, dan datamu terbuka
+lagi setelah masuk dengan email dan kata sandi.
+
+## Pengingat tagihan
+
+Pesan pengingat disiapkan di HP-mu dan dikirim lewat WhatsApp atau aplikasi
+lain yang kamu pilih, hanya saat kamu menekan kirim. SmartToko tidak mengirim
+pesan sendiri dan tidak menyimpan percakapan itu.
 
 ## Pengenalan suara
 

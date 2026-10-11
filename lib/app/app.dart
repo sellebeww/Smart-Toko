@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../features/app_lock/ui/app_lock_gate.dart';
 import '../features/auth/auth_providers.dart';
 import '../features/backup/backup_trigger.dart';
 import '../features/auth/ui/login_screen.dart';
@@ -45,6 +46,9 @@ class _SmartTokoAppState extends ConsumerState<SmartTokoApp> {
       title: 'SmartToko',
       debugShowCheckedModeBanner: false,
       theme: SmartTokoTheme.light,
+      // Di atas Navigator, supaya kunci menutupi semua layar dan dialog.
+      builder: (context, child) =>
+          AppLockGate(child: child ?? const SizedBox.shrink()),
       home: authState.when(
         loading: () =>
             const Scaffold(body: Center(child: CircularProgressIndicator())),

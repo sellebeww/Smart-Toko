@@ -17,7 +17,14 @@ Review UI Figma, perbaikan terbaru, dan batas pengujiannya ada di
 - Catat transaksi lewat suara atau ketik manual. Draf selalu diperiksa dulu.
 - Katalog menu/bahan dan stok yang tumbuh otomatis dari transaksi; kontak
   pelanggan/supplier.
-- Riwayat, laporan, dan export Excel.
+- **Utang & piutang (kasbon):** catat penjualan/pembelian belum dibayar
+  (atau ucapkan "Bu Sari ngutang nasi goreng dua lima belas ribu"), cicil
+  dan lunasi dari detail transaksi, lihat siapa saja yang belum bayar, dan
+  kirim pengingat lewat WhatsApp.
+- Riwayat dengan pencarian (barang, catatan, nama) dan filter "Belum
+  lunas", laporan, dan export Excel (termasuk status bayar dan sisa).
+- Bagikan nota penjualan sebagai teks.
+- Kunci aplikasi dengan PIN (mengunci tampilan; bukan enkripsi data).
 - Bantuan AI (opsional) untuk ucapan yang sulit diurai, lewat server.
 - Cadangan cloud (opsional) per toko, dengan pemulihan di HP baru.
 - Verifikasi toko (opsional): KTP, foto toko, selfie, NIB, lalu ditinjau
@@ -199,6 +206,11 @@ Butuh project Supabase yang sudah disiapkan seperti di atas.
 
 ## Batasan yang diketahui
 
+- Kunci PIN melindungi dari orang yang meminjam HP yang sedang menyala. Data
+  di HP tidak dienkripsi, jadi PIN tidak melindungi dari orang yang mengambil
+  berkas datanya. Buka kunci dengan sidik jari/wajah belum ada.
+- Pengingat tagihan hanya menyiapkan pesan; pengguna yang menekan kirim di
+  WhatsApp. Belum ada pengingat terjadwal.
 - Login dengan nomor HP belum ada (butuh penyedia SMS berbayar).
 - Pencatatan otomatis dari notifikasi QRIS belum ada.
 - iOS belum diuji di perangkat nyata.

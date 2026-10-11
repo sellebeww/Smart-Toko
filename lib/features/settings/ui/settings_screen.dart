@@ -15,6 +15,8 @@ import '../../../app/providers.dart';
 import '../../../core/format.dart';
 import '../../../core/supabase_config.dart';
 import '../../account/account_deletion_service.dart';
+import '../../app_lock/app_lock_controller.dart';
+import '../../app_lock/ui/pin_dialogs.dart';
 import '../../auth/auth_providers.dart';
 import '../../backup/backup_actions.dart';
 import '../../backup/backup_providers.dart';
@@ -79,6 +81,9 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
             ],
+            const Divider(),
+            const _SectionHeader('Keamanan'),
+            const _AppLockTiles(),
             const Divider(),
             const _SectionHeader('Laporan error'),
             SwitchListTile(
@@ -157,6 +162,39 @@ class SettingsScreen extends ConsumerWidget {
           .read(settingsControllerProvider.notifier)
           .setBackupEnabled(value: false);
     }
+  }
+}
+
+/// Sakelar kunci PIN dan, bila menyala, pengubahan PIN.
+class _AppLockTiles extends ConsumerWidget {
+  const _AppLockTiles();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final enabled =
+        ref.watch(appLockControllerProvider).value?.enabled ?? false;
+    return Column(
+      children: [
+        SwitchListTile(
+          value: enabled,
+          onChanged: (value) => value
+              ? showEnablePin(context, ref)
+              : showDisablePin(context, ref),
+          title: const Text('Kunci aplikasi dengan PIN'),
+          subtitle: const Text(
+            'Aplikasi meminta PIN saat dibuka dan setelah ditinggalkan lebih '
+            'dari satu menit, supaya catatan keuangan tidak terbuka untuk '
+            'orang yang meminjam HP-mu.',
+          ),
+        ),
+        if (enabled)
+          ListTile(
+            title: const Text('Ubah PIN'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => showChangePin(context, ref),
+          ),
+      ],
+    );
   }
 }
 

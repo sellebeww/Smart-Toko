@@ -13,6 +13,12 @@ class SettingsKeys {
   static const String backupEnabled = 'backup_enabled';
   static const String llmEnabled = 'llm_enabled';
   static const String errorReportsEnabled = 'error_reports_enabled';
+
+  /// Kunci PIN: hash + garam PIN, dan penghitung percobaan salah.
+  static const String appLockHash = 'app_lock_hash';
+  static const String appLockSalt = 'app_lock_salt';
+  static const String appLockFailed = 'app_lock_failed';
+  static const String appLockBlockedUntil = 'app_lock_blocked_until';
   static const String onboardingDone = 'onboarding_done';
   static const String activeStoreId = 'active_store_id';
 
