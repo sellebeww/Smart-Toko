@@ -5,6 +5,9 @@
 /// yang mengganti layar — layar ini tidak melakukan navigasi sendiri.
 library;
 
+import '../../../core/supabase_config.dart';
+import 'phone_login_screen.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -242,6 +245,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               ),
                         child: const Text('Belum punya akun? Daftar'),
                       ),
+                      if (SupabaseConfig.phoneLogin)
+                        TextButton.icon(
+                          onPressed: _submitting
+                              ? null
+                              : () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const PhoneLoginScreen(),
+                                  ),
+                                ),
+                          icon: const Icon(Icons.sms_outlined),
+                          label: const Text('Masuk dengan nomor HP'),
+                        ),
                     ],
                   ),
                 ),

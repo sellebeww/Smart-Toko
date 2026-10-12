@@ -10,7 +10,8 @@ create role service_role nologin bypassrls;
 create schema auth;
 create table auth.users (
   id uuid primary key default gen_random_uuid(),
-  email varchar(255)
+  email varchar(255),
+  phone text
 );
 
 -- Sama seperti Supabase: uid dibaca dari klaim JWT permintaan.

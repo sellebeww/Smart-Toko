@@ -90,8 +90,25 @@ class AuthRepository {
   Future<void> resendSignupCode(String email) =>
       _client.auth.resend(type: OtpType.signup, email: email.trim());
 
+  /// Mengirim kode lewat SMS. Akun dibuat otomatis bila nomor ini baru.
+  /// [phone] dalam format internasional tanpa + (628...).
+  Future<void> sendPhoneCode(String phone) =>
+      _client.auth.signInWithOtp(phone: '+$phone');
+
+  Future<AppUser> verifyPhoneCode({
+    required String phone,
+    required String code,
+  }) async {
+    final response = await _client.auth.verifyOTP(
+      phone: '+$phone',
+      token: code.trim(),
+      type: OtpType.sms,
+    );
+    return _toAppUser(response.user)!;
+  }
+
   AppUser? _toAppUser(User? user) {
     if (user == null) return null;
-    return AppUser(uid: user.id, email: user.email);
+    return AppUser(uid: user.id, email: user.email, phone: user.phone);
   }
 }

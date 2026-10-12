@@ -832,7 +832,7 @@ begin
     raise exception 'owner only' using errcode = '42501';
   end if;
   return query
-  select m.user_id, u.email::text, m.created_at
+  select m.user_id, coalesce(u.email::text, '+' || u.phone::text), m.created_at
   from public.store_members m
   join auth.users u on u.id = m.user_id
   where m.store_id = p_store

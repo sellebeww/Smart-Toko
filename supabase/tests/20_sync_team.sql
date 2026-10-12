@@ -187,6 +187,18 @@ end $$;
 select test.denied($$select public.accept_store_invite('TEBAK21')$$,
   'tebakan kode dibatasi per hari', '54000');
 
+-- Akun nomor HP (tanpa email) tampil dengan nomornya.
+reset role;
+insert into auth.users (id, phone) values
+  ('0d000000-0000-0000-0000-00000000000d', '628123456789');
+insert into public.store_members (store_id, user_id) values
+  ('5a000000-0000-0000-0000-00000000005a', '0d000000-0000-0000-0000-00000000000d');
+set role authenticated;
+select test.login('0a000000-0000-0000-0000-00000000000a');
+select test.ok((select count(*) from public.store_member_list(
+  '5a000000-0000-0000-0000-00000000005a') where email = '+628123456789') = 1,
+  'karyawan dengan akun nomor HP tampil dengan nomornya');
+
 -- --------------------------------------------- mengeluarkan karyawan
 reset role; set role authenticated;
 select test.login('0a000000-0000-0000-0000-00000000000a');

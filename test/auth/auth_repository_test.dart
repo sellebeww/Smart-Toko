@@ -13,6 +13,7 @@ import 'package:http/testing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:smart_toko/features/auth/data/auth_repository.dart';
+import 'package:smart_toko/features/auth/domain/app_user.dart';
 
 String _b64(Map<String, Object?> json) =>
     base64Url.encode(utf8.encode(jsonEncode(json))).replaceAll('=', '');
@@ -220,5 +221,55 @@ void main() {
         throwsA(isA<AuthException>()),
       );
     });
+  });
+
+  group('masuk dengan nomor HP', () {
+    test('kode SMS dikirim ke nomor berformat internasional', () async {
+      respond = (request) => reply(request, <String, Object?>{});
+
+      await repository.sendPhoneCode('628123456789');
+
+      final body = jsonDecode(requests.single.body) as Map<String, Object?>;
+      expect(requests.single.url.path, endsWith('/otp'));
+      expect(body['phone'], '+628123456789');
+    });
+
+    test('kode benar membuat sesi dan identitasnya nomor HP', () async {
+      respond = (request) => reply(request, {
+        ..._session(),
+        'user': {..._user(), 'email': null, 'phone': '628123456789'},
+      });
+
+      final user = await repository.verifyPhoneCode(
+        phone: '628123456789',
+        code: ' 123456 ',
+      );
+
+      final body = jsonDecode(requests.single.body) as Map<String, Object?>;
+      expect(body['type'], 'sms');
+      expect(body['token'], '123456');
+      expect(body['phone'], '+628123456789');
+      expect(user.identity, '+628123456789');
+    });
+
+    test('kode salah ditolak', () async {
+      respond = (request) => reply(request, {
+        'error_code': 'otp_expired',
+        'msg': 'Token has expired or is invalid',
+      }, 403);
+
+      await expectLater(
+        repository.verifyPhoneCode(phone: '628123456789', code: '000000'),
+        throwsA(isA<AuthException>()),
+      );
+    });
+  });
+
+  test('identitas memakai email bila ada', () {
+    expect(
+      const AppUser(uid: 'u', email: 'a@b.com', phone: '62812').identity,
+      'a@b.com',
+    );
+    expect(const AppUser(uid: 'u').identity, isNull);
   });
 }

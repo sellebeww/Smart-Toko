@@ -29,7 +29,7 @@ Future<TxRecord?> showTransactionEditor(
   Future<void> persist(ConfirmedDraft confirmed) async {
     final repository = ref.read(transactionRepositoryProvider);
     final storeId = ref.read(activeStoreIdProvider)!;
-    final recordedBy = ref.read(authStateChangesProvider).value?.email;
+    final recordedBy = ref.read(authStateChangesProvider).value?.identity;
     saved = replaceId == null
         ? await repository.save(
             confirmed,

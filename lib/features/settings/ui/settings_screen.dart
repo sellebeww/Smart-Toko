@@ -309,7 +309,7 @@ class _AccountTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final email = ref.watch(authStateChangesProvider).value?.email;
+    final email = ref.watch(authStateChangesProvider).value?.identity;
 
     return ListTile(
       leading: const Icon(Icons.person_outline),

@@ -30,4 +30,10 @@ class SupabaseConfig {
   /// dengan `--dart-define=PRIVACY_URL=https://...`; selama kosong, menu
   /// "Kebijakan privasi" tidak ditampilkan.
   static const String privacyUrl = String.fromEnvironment('PRIVACY_URL');
+
+  /// Masuk dengan nomor HP butuh penyedia SMS (Twilio/Vonage/MessageBird)
+  /// yang dipasang di Supabase > Authentication > Providers > Phone. Selama
+  /// belum, pilihan ini disembunyikan. Nyalakan dengan
+  /// `--dart-define=PHONE_LOGIN=true`.
+  static const bool phoneLogin = bool.fromEnvironment('PHONE_LOGIN');
 }

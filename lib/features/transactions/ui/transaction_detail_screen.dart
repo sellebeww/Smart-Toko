@@ -123,7 +123,7 @@ class TransactionDetailScreen extends ConsumerWidget {
               : contactNames[record.contactId];
           // Karyawan hanya mengoreksi/menghapus catatannya sendiri; server
           // menolak selain itu.
-          final email = ref.watch(authStateChangesProvider).value?.email;
+          final email = ref.watch(authStateChangesProvider).value?.identity;
           final canEdit = canEditRecord(
             staff: ref.watch(isStaffProvider),
             email: email,
