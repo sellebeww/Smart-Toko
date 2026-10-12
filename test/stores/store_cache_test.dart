@@ -31,6 +31,14 @@ StoreProfile profile(
   verificationStatus: status,
 );
 
+/// SQLite (ffi) berjalan di isolate lain, jadi pumpEventQueue saja tidak
+/// cukup untuk menunggunya; tunggu sampai kondisinya terpenuhi.
+Future<void> until(bool Function() done) async {
+  for (var i = 0; i < 300 && !done(); i++) {
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+}
+
 void main() {
   setUpAll(() {
     sqfliteFfiInit();
@@ -81,11 +89,11 @@ void main() {
       cache: cache,
       ownerUid: 'owner-1',
     ).listen(events.add);
-    await pumpEventQueue();
+    await until(() => events.isNotEmpty);
     expect(events.single.single.name, 'Tersimpan');
 
     remote.add([profile('s1', name: 'Dari server')]);
-    await pumpEventQueue();
+    await until(() => events.length > 1);
     expect(events.last.single.name, 'Dari server');
     expect((await cache.forOwner('owner-1')).single.name, 'Dari server');
 
