@@ -29,12 +29,22 @@ class SyncPayloadBuilder {
 
   /// [identityConsent] hanya boleh true bila pengguna menyetujui layar
   /// persetujuan data identitas — bukan sekadar menyalakan cadangan.
+  ///
+  /// [keepRecorder] hanya untuk sinkronisasi di dalam satu toko: pemilik
+  /// perlu tahu karyawan mana yang mencatat. Field identitas lain tetap
+  /// dibuang.
   Map<String, Object?> build(
     Map<String, Object?> raw, {
     required bool identityConsent,
+    bool keepRecorder = false,
   }) {
     if (identityConsent) return Map<String, Object?>.unmodifiable(raw);
-    return Map<String, Object?>.unmodifiable(redactIdentity(raw));
+    return Map<String, Object?>.unmodifiable(
+      redactIdentity(
+        raw,
+        keep: keepRecorder ? const {'recorded_by'} : const {},
+      ),
+    );
   }
 
   Map<String, Object?> buildTransaction(
@@ -47,21 +57,26 @@ class SyncPayloadBuilder {
 
   /// Membuang field identitas secara rekursif, termasuk di dalam daftar dan
   /// peta bersarang.
-  static Map<String, Object?> redactIdentity(Map<String, Object?> raw) {
+  static Map<String, Object?> redactIdentity(
+    Map<String, Object?> raw, {
+    Set<String> keep = const {},
+  }) {
     final result = <String, Object?>{};
     raw.forEach((key, value) {
-      if (identityFieldNames.contains(key)) return;
-      result[key] = _redactValue(value);
+      if (identityFieldNames.contains(key) && !keep.contains(key)) return;
+      result[key] = _redactValue(value, keep);
     });
     return result;
   }
 
-  static Object? _redactValue(Object? value) {
-    if (value is Map<String, Object?>) return redactIdentity(value);
+  static Object? _redactValue(Object? value, Set<String> keep) {
+    if (value is Map<String, Object?>) return redactIdentity(value, keep: keep);
     if (value is Map) {
-      return redactIdentity(value.map((k, v) => MapEntry('$k', v)));
+      return redactIdentity(value.map((k, v) => MapEntry('$k', v)), keep: keep);
     }
-    if (value is List) return [for (final item in value) _redactValue(item)];
+    if (value is List) {
+      return [for (final item in value) _redactValue(item, keep)];
+    }
     return value;
   }
 }

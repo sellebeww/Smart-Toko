@@ -7,6 +7,9 @@
 /// juga harus terpisah.
 library;
 
+import '../../sync/ui/team_screen.dart';
+import '../../sync/sync_providers.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -38,6 +41,8 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsControllerProvider);
     final isAdmin = ref.watch(isAdminProvider).value ?? false;
+    final staff = ref.watch(isStaffProvider);
+    final syncOn = ref.watch(activeStoreProvider).value?.syncEnabled ?? false;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Pengaturan')),
@@ -50,22 +55,45 @@ class SettingsScreen extends ConsumerWidget {
             const _AccountTile(),
             const Divider(),
             const _SectionHeader('Toko'),
-            const _StoreTile(),
-            const Divider(),
-            const _SectionHeader('Data kamu'),
-            const _OwnershipNote(),
-            SwitchListTile(
-              value: state.backupEnabled,
-              onChanged: (value) => _setBackup(context, ref, value),
-              title: const Text('Cadangkan otomatis ke cloud'),
-              subtitle: const Text(
-                'Kalau dinyalakan, salinan transaksi, barang, stok, dan kontak '
-                'toko ini disimpan di akunmu, supaya bisa dipulihkan bila HP '
-                'hilang atau ganti HP. Hanya kamu yang bisa membukanya.',
+            // Karyawan tidak mengatur profil dan verifikasi toko.
+            if (!staff) const _StoreTile(),
+            ListTile(
+              leading: Icon(staff ? Icons.badge_outlined : Icons.sync_alt),
+              title: Text(
+                staff ? 'Toko tempat kerja' : 'Sinkronisasi & karyawan',
+              ),
+              subtitle: Text(
+                staff
+                    ? 'Kamu karyawan di toko ini'
+                    : syncOn
+                    ? 'Menyala · pakai di beberapa HP dan undang karyawan'
+                    : 'Pakai di beberapa HP dan undang karyawan',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const TeamScreen()),
               ),
             ),
-            _BackupTile(enabled: state.backupEnabled),
             const Divider(),
+            // Cadangan adalah milik pemilik toko; karyawan tidak mencadangkan
+            // data toko orang lain ke akunnya.
+            if (!staff) ...[
+              const _SectionHeader('Data kamu'),
+              const _OwnershipNote(),
+              SwitchListTile(
+                value: state.backupEnabled,
+                onChanged: (value) => _setBackup(context, ref, value),
+                title: const Text('Cadangkan otomatis ke cloud'),
+                subtitle: const Text(
+                  'Kalau dinyalakan, salinan transaksi, barang, stok, dan '
+                  'kontak toko ini disimpan di akunmu, supaya bisa dipulihkan '
+                  'bila HP hilang atau ganti HP. Hanya kamu yang bisa '
+                  'membukanya.',
+                ),
+              ),
+              _BackupTile(enabled: state.backupEnabled, allowRestore: !syncOn),
+              const Divider(),
+            ],
             if (SupabaseConfig.aiAssist) ...[
               const _SectionHeader('Bantuan AI untuk ucapan sulit'),
               SwitchListTile(
@@ -418,7 +446,12 @@ class _StoreBody extends StatelessWidget {
 class _BackupTile extends ConsumerStatefulWidget {
   final bool enabled;
 
-  const _BackupTile({required this.enabled});
+  /// Pemulihan menimpa seluruh data toko di HP ini. Saat sinkronisasi
+  /// menyala, data server sudah jadi sumber pemulihan, dan menimpanya dengan
+  /// cadangan lama akan ikut tersebar ke HP lain.
+  final bool allowRestore;
+
+  const _BackupTile({required this.enabled, this.allowRestore = true});
 
   @override
   ConsumerState<_BackupTile> createState() => _BackupTileState();
@@ -493,15 +526,16 @@ class _BackupTileState extends ConsumerState<_BackupTile> {
                   child: const Text('Cadangkan'),
                 ),
         ),
-        ListTile(
-          leading: const Icon(Icons.settings_backup_restore),
-          title: const Text('Pulihkan dari cadangan'),
-          subtitle: const Text(
-            'Ganti data toko di HP ini dengan isi cadangan.',
+        if (widget.allowRestore)
+          ListTile(
+            leading: const Icon(Icons.settings_backup_restore),
+            title: const Text('Pulihkan dari cadangan'),
+            subtitle: const Text(
+              'Ganti data toko di HP ini dengan isi cadangan.',
+            ),
+            enabled: !_busy,
+            onTap: _restore,
           ),
-          enabled: !_busy,
-          onTap: _restore,
-        ),
       ],
     );
   }

@@ -6,6 +6,8 @@
 /// setara — bukan disembunyikan di menu.
 library;
 
+import '../../sync/sync_providers.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -198,7 +200,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               child: CustomScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
-                  SliverToBoxAdapter(child: _TodaySummary(totals: totals)),
+                  SliverToBoxAdapter(
+                    child: _TodaySummary(
+                      totals: totals,
+                      showProfit: !ref.watch(isStaffProvider),
+                    ),
+                  ),
                   const SliverToBoxAdapter(child: _RestoreOffer()),
                   SliverToBoxAdapter(
                     child: _CaptureBar(
@@ -385,7 +392,12 @@ class _RestoreOfferState extends ConsumerState<_RestoreOffer> {
   @override
   Widget build(BuildContext context) {
     final backupAt = ref.watch(restoreOfferProvider).value;
-    if (backupAt == null) return const SizedBox.shrink();
+    final syncOn = ref.watch(activeStoreProvider).value?.syncEnabled ?? false;
+    // Karyawan tidak memulihkan cadangan; toko yang tersinkron sudah dipulihkan
+    // dari server.
+    if (backupAt == null || syncOn || ref.watch(isStaffProvider)) {
+      return const SizedBox.shrink();
+    }
 
     return MaterialBanner(
       leading: const Icon(Icons.cloud_download_outlined),
@@ -456,7 +468,8 @@ class _StoreTitle extends ConsumerWidget {
 
 class _TodaySummary extends StatelessWidget {
   final AsyncValue<ReportData> totals;
-  const _TodaySummary({required this.totals});
+  final bool showProfit;
+  const _TodaySummary({required this.totals, this.showProfit = true});
 
   @override
   Widget build(BuildContext context) {
@@ -512,12 +525,13 @@ class _TodaySummary extends StatelessWidget {
           LayoutBuilder(
             builder: (context, constraints) {
               final cells = [
-                _SummaryAmount(
-                  label: 'Estimasi laba',
-                  amount: value == null
-                      ? null
-                      : value.omzet - value.pengeluaran,
-                ),
+                if (showProfit)
+                  _SummaryAmount(
+                    label: 'Estimasi laba',
+                    amount: value == null
+                        ? null
+                        : value.omzet - value.pengeluaran,
+                  ),
                 _SummaryAmount(
                   label: 'Bahan + operasional',
                   amount: value?.pengeluaran,

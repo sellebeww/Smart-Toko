@@ -21,11 +21,21 @@ class StoreRepository {
 
   /// Realtime lewat `.stream()` butuh tabel `stores` di publication
   /// `supabase_realtime` — sudah termasuk di skrip SQL setup.
-  Stream<List<StoreProfile>> watchStoresForUser(String ownerUid) {
-    return _stores.stream(primaryKey: ['id']).eq('owner_uid', ownerUid).map((
+  ///
+  /// Toko tempat pengguna menjadi karyawan diambil sekali di awal (lewat
+  /// `my_staff_stores`). Bila gagal (luring), seluruh aliran gagal, sehingga
+  /// salinan lokal yang dipakai — daftar tanpa toko kerja tidak boleh
+  /// dianggap lengkap, karena salinan lokalnya akan dibersihkan.
+  Stream<List<StoreProfile>> watchStoresForUser(String ownerUid) async* {
+    final staffRows = await _client.rpc('my_staff_stores') as List;
+    final staff = [
+      for (final row in staffRows.cast<Map<String, dynamic>>())
+        StoreProfile.fromRow(row),
+    ];
+    yield* _stores.stream(primaryKey: ['id']).eq('owner_uid', ownerUid).map((
       rows,
     ) {
-      final stores = rows.map(StoreProfile.fromRow).toList();
+      final stores = [...rows.map(StoreProfile.fromRow), ...staff];
       stores.sort((a, b) => a.createdAt.compareTo(b.createdAt));
       return stores;
     });

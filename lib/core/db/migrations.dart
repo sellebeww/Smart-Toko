@@ -7,7 +7,7 @@ library;
 
 import 'package:sqflite/sqflite.dart';
 
-const int schemaVersion = 7;
+const int schemaVersion = 8;
 
 class Migration {
   final int version;
@@ -230,5 +230,206 @@ const List<Migration> migrations = [
   Migration(7, [
     'ALTER TABLE products ADD COLUMN cost_price INTEGER',
     'ALTER TABLE transaction_items ADD COLUMN unit_cost INTEGER',
+  ]),
+  // Sinkronisasi antar-HP. Trigger mencatat setiap perubahan (termasuk
+  // penghapusan berantai) ke sync_changes, hanya untuk toko yang
+  // sinkronisasinya menyala di HP ini. Saat menerapkan data dari server,
+  // sync_meta.applying = 1 supaya perubahan itu tidak dikirim balik.
+  // Barang transaksi tidak punya store_id: tokonya dibaca dari induknya.
+  // Bila induknya sudah terhapus (hapus berantai), server sendiri yang
+  // menghapus barangnya.
+  Migration(8, [
+    'ALTER TABLE stores ADD COLUMN member_uid TEXT',
+    'ALTER TABLE stores ADD COLUMN sync_enabled INTEGER NOT NULL DEFAULT 0',
+    'CREATE INDEX idx_stores_member ON stores(member_uid)',
+    '''
+    CREATE TABLE sync_meta (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      applying INTEGER NOT NULL DEFAULT 0
+    )
+    ''',
+    'INSERT INTO sync_meta (id, applying) VALUES (1, 0)',
+    '''
+    CREATE TABLE sync_stores (
+      store_id TEXT PRIMARY KEY,
+      cursor INTEGER NOT NULL DEFAULT 0,
+      last_synced_at INTEGER
+    )
+    ''',
+    '''
+    CREATE TABLE sync_changes (
+      seq INTEGER PRIMARY KEY AUTOINCREMENT,
+      store_id TEXT NOT NULL,
+      table_name TEXT NOT NULL,
+      row_id TEXT NOT NULL,
+      op TEXT NOT NULL CHECK (op IN ('upsert', 'delete'))
+    )
+    ''',
+    'CREATE INDEX idx_sync_changes_store ON sync_changes(store_id, seq)',
+    '''
+    CREATE TRIGGER sync_products_insert AFTER INSERT ON products
+    WHEN (SELECT applying FROM sync_meta WHERE id = 1) = 0
+      AND EXISTS (SELECT 1 FROM sync_stores WHERE store_id = NEW.store_id)
+    BEGIN
+      INSERT INTO sync_changes (store_id, table_name, row_id, op)
+      VALUES (NEW.store_id, 'products', NEW.id, 'upsert');
+    END
+    ''',
+    '''
+    CREATE TRIGGER sync_products_update AFTER UPDATE ON products
+    WHEN (SELECT applying FROM sync_meta WHERE id = 1) = 0
+      AND EXISTS (SELECT 1 FROM sync_stores WHERE store_id = NEW.store_id)
+    BEGIN
+      INSERT INTO sync_changes (store_id, table_name, row_id, op)
+      VALUES (NEW.store_id, 'products', NEW.id, 'upsert');
+    END
+    ''',
+    '''
+    CREATE TRIGGER sync_products_delete AFTER DELETE ON products
+    WHEN (SELECT applying FROM sync_meta WHERE id = 1) = 0
+      AND EXISTS (SELECT 1 FROM sync_stores WHERE store_id = OLD.store_id)
+    BEGIN
+      INSERT INTO sync_changes (store_id, table_name, row_id, op)
+      VALUES (OLD.store_id, 'products', OLD.id, 'delete');
+    END
+    ''',
+    '''
+    CREATE TRIGGER sync_contacts_insert AFTER INSERT ON contacts
+    WHEN (SELECT applying FROM sync_meta WHERE id = 1) = 0
+      AND EXISTS (SELECT 1 FROM sync_stores WHERE store_id = NEW.store_id)
+    BEGIN
+      INSERT INTO sync_changes (store_id, table_name, row_id, op)
+      VALUES (NEW.store_id, 'contacts', NEW.id, 'upsert');
+    END
+    ''',
+    '''
+    CREATE TRIGGER sync_contacts_update AFTER UPDATE ON contacts
+    WHEN (SELECT applying FROM sync_meta WHERE id = 1) = 0
+      AND EXISTS (SELECT 1 FROM sync_stores WHERE store_id = NEW.store_id)
+    BEGIN
+      INSERT INTO sync_changes (store_id, table_name, row_id, op)
+      VALUES (NEW.store_id, 'contacts', NEW.id, 'upsert');
+    END
+    ''',
+    '''
+    CREATE TRIGGER sync_contacts_delete AFTER DELETE ON contacts
+    WHEN (SELECT applying FROM sync_meta WHERE id = 1) = 0
+      AND EXISTS (SELECT 1 FROM sync_stores WHERE store_id = OLD.store_id)
+    BEGIN
+      INSERT INTO sync_changes (store_id, table_name, row_id, op)
+      VALUES (OLD.store_id, 'contacts', OLD.id, 'delete');
+    END
+    ''',
+    '''
+    CREATE TRIGGER sync_transactions_insert AFTER INSERT ON transactions
+    WHEN (SELECT applying FROM sync_meta WHERE id = 1) = 0
+      AND EXISTS (SELECT 1 FROM sync_stores WHERE store_id = NEW.store_id)
+    BEGIN
+      INSERT INTO sync_changes (store_id, table_name, row_id, op)
+      VALUES (NEW.store_id, 'transactions', NEW.id, 'upsert');
+    END
+    ''',
+    '''
+    CREATE TRIGGER sync_transactions_update AFTER UPDATE ON transactions
+    WHEN (SELECT applying FROM sync_meta WHERE id = 1) = 0
+      AND EXISTS (SELECT 1 FROM sync_stores WHERE store_id = NEW.store_id)
+    BEGIN
+      INSERT INTO sync_changes (store_id, table_name, row_id, op)
+      VALUES (NEW.store_id, 'transactions', NEW.id, 'upsert');
+    END
+    ''',
+    '''
+    CREATE TRIGGER sync_transactions_delete AFTER DELETE ON transactions
+    WHEN (SELECT applying FROM sync_meta WHERE id = 1) = 0
+      AND EXISTS (SELECT 1 FROM sync_stores WHERE store_id = OLD.store_id)
+    BEGIN
+      INSERT INTO sync_changes (store_id, table_name, row_id, op)
+      VALUES (OLD.store_id, 'transactions', OLD.id, 'delete');
+    END
+    ''',
+    '''
+    CREATE TRIGGER sync_stock_movements_insert AFTER INSERT ON stock_movements
+    WHEN (SELECT applying FROM sync_meta WHERE id = 1) = 0
+      AND EXISTS (SELECT 1 FROM sync_stores WHERE store_id = NEW.store_id)
+    BEGIN
+      INSERT INTO sync_changes (store_id, table_name, row_id, op)
+      VALUES (NEW.store_id, 'stock_movements', NEW.id, 'upsert');
+    END
+    ''',
+    '''
+    CREATE TRIGGER sync_stock_movements_update AFTER UPDATE ON stock_movements
+    WHEN (SELECT applying FROM sync_meta WHERE id = 1) = 0
+      AND EXISTS (SELECT 1 FROM sync_stores WHERE store_id = NEW.store_id)
+    BEGIN
+      INSERT INTO sync_changes (store_id, table_name, row_id, op)
+      VALUES (NEW.store_id, 'stock_movements', NEW.id, 'upsert');
+    END
+    ''',
+    '''
+    CREATE TRIGGER sync_stock_movements_delete AFTER DELETE ON stock_movements
+    WHEN (SELECT applying FROM sync_meta WHERE id = 1) = 0
+      AND EXISTS (SELECT 1 FROM sync_stores WHERE store_id = OLD.store_id)
+    BEGIN
+      INSERT INTO sync_changes (store_id, table_name, row_id, op)
+      VALUES (OLD.store_id, 'stock_movements', OLD.id, 'delete');
+    END
+    ''',
+    '''
+    CREATE TRIGGER sync_debt_payments_insert AFTER INSERT ON debt_payments
+    WHEN (SELECT applying FROM sync_meta WHERE id = 1) = 0
+      AND EXISTS (SELECT 1 FROM sync_stores WHERE store_id = NEW.store_id)
+    BEGIN
+      INSERT INTO sync_changes (store_id, table_name, row_id, op)
+      VALUES (NEW.store_id, 'debt_payments', NEW.id, 'upsert');
+    END
+    ''',
+    '''
+    CREATE TRIGGER sync_debt_payments_update AFTER UPDATE ON debt_payments
+    WHEN (SELECT applying FROM sync_meta WHERE id = 1) = 0
+      AND EXISTS (SELECT 1 FROM sync_stores WHERE store_id = NEW.store_id)
+    BEGIN
+      INSERT INTO sync_changes (store_id, table_name, row_id, op)
+      VALUES (NEW.store_id, 'debt_payments', NEW.id, 'upsert');
+    END
+    ''',
+    '''
+    CREATE TRIGGER sync_debt_payments_delete AFTER DELETE ON debt_payments
+    WHEN (SELECT applying FROM sync_meta WHERE id = 1) = 0
+      AND EXISTS (SELECT 1 FROM sync_stores WHERE store_id = OLD.store_id)
+    BEGIN
+      INSERT INTO sync_changes (store_id, table_name, row_id, op)
+      VALUES (OLD.store_id, 'debt_payments', OLD.id, 'delete');
+    END
+    ''',
+    '''
+    CREATE TRIGGER sync_transaction_items_insert AFTER INSERT ON transaction_items
+    WHEN (SELECT applying FROM sync_meta WHERE id = 1) = 0
+    BEGIN
+      INSERT INTO sync_changes (store_id, table_name, row_id, op)
+      SELECT t.store_id, 'transaction_items', NEW.id, 'upsert' FROM transactions t
+      WHERE t.id = NEW.transaction_id
+        AND EXISTS (SELECT 1 FROM sync_stores s WHERE s.store_id = t.store_id);
+    END
+    ''',
+    '''
+    CREATE TRIGGER sync_transaction_items_update AFTER UPDATE ON transaction_items
+    WHEN (SELECT applying FROM sync_meta WHERE id = 1) = 0
+    BEGIN
+      INSERT INTO sync_changes (store_id, table_name, row_id, op)
+      SELECT t.store_id, 'transaction_items', NEW.id, 'upsert' FROM transactions t
+      WHERE t.id = NEW.transaction_id
+        AND EXISTS (SELECT 1 FROM sync_stores s WHERE s.store_id = t.store_id);
+    END
+    ''',
+    '''
+    CREATE TRIGGER sync_transaction_items_delete AFTER DELETE ON transaction_items
+    WHEN (SELECT applying FROM sync_meta WHERE id = 1) = 0
+    BEGIN
+      INSERT INTO sync_changes (store_id, table_name, row_id, op)
+      SELECT t.store_id, 'transaction_items', OLD.id, 'delete' FROM transactions t
+      WHERE t.id = OLD.transaction_id
+        AND EXISTS (SELECT 1 FROM sync_stores s WHERE s.store_id = t.store_id);
+    END
+    ''',
   ]),
 ];

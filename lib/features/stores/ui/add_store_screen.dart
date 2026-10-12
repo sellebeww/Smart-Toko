@@ -4,6 +4,8 @@
 /// [AddStoreScreen.existing], form yang sama dipakai mengubah profil toko.
 library;
 
+import '../../sync/ui/join_store_dialog.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -162,7 +164,17 @@ class _AddStoreScreenState extends ConsumerState<AddStoreScreen> {
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
-                  const SizedBox(height: 32),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () => showJoinStoreDialog(context, ref),
+                      icon: const Icon(Icons.group_add_outlined),
+                      label: const Text(
+                        'Karyawan? Gabung toko dengan kode undangan',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
                 ],
                 TextFormField(
                   controller: _nameController,

@@ -5,6 +5,8 @@
 /// merapikan (ganti nama, harga, batas stok) dan mencatat pemakaian.
 library;
 
+import '../../sync/sync_providers.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -45,16 +47,20 @@ class CatalogScreen extends ConsumerWidget {
               _ProductList(kind: ProductKind.bahan),
             ],
           ),
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: () {
-              final kind = DefaultTabController.of(context).index == 0
-                  ? ProductKind.menu
-                  : ProductKind.bahan;
-              showProductForm(context, kind: kind);
-            },
-            icon: const Icon(Icons.add),
-            label: const Text('Tambah'),
-          ),
+          // Karyawan tidak menambah barang manual (modal hanya diatur
+          // pemilik); barang tetap bertambah sendiri dari transaksi.
+          floatingActionButton: ref.watch(isStaffProvider)
+              ? null
+              : FloatingActionButton.extended(
+                  onPressed: () {
+                    final kind = DefaultTabController.of(context).index == 0
+                        ? ProductKind.menu
+                        : ProductKind.bahan;
+                    showProductForm(context, kind: kind);
+                  },
+                  icon: const Icon(Icons.add),
+                  label: const Text('Tambah'),
+                ),
         ),
       ),
     );
@@ -68,6 +74,7 @@ class _ProductList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final staff = ref.watch(isStaffProvider);
     final products = ref.watch(productsProvider(kind));
     final theme = Theme.of(context);
 
@@ -184,6 +191,9 @@ class _ProductList extends ConsumerWidget {
                           builder: (_) => ProductDetailScreen(productId: p.id),
                         ),
                       )
+                    // Karyawan tidak mengubah harga/modal menu.
+                    : staff
+                    ? null
                     : showProductForm(context, kind: kind, existing: p),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -274,21 +284,22 @@ class _ProductList extends ConsumerWidget {
                             fontSize: 16,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          p.costPrice == null
-                              ? 'Modal belum diisi'
-                              : p.unitProfit == null
-                              ? 'Modal ${formatRupiah(p.costPrice!)}'
-                              : 'Modal ${formatRupiah(p.costPrice!)} · untung '
-                                    '${formatRupiah(p.unitProfit!)} '
-                                    '(${p.marginPercent}%)',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: (p.unitProfit ?? 0) < 0
-                                ? theme.colorScheme.error
-                                : null,
+                        if (!staff) const SizedBox(height: 4),
+                        if (!staff)
+                          Text(
+                            p.costPrice == null
+                                ? 'Modal belum diisi'
+                                : p.unitProfit == null
+                                ? 'Modal ${formatRupiah(p.costPrice!)}'
+                                : 'Modal ${formatRupiah(p.costPrice!)} · untung '
+                                      '${formatRupiah(p.unitProfit!)} '
+                                      '(${p.marginPercent}%)',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: (p.unitProfit ?? 0) < 0
+                                  ? theme.colorScheme.error
+                                  : null,
+                            ),
                           ),
-                        ),
                       ],
                     ],
                   ),

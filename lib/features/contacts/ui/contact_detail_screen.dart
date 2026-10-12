@@ -1,6 +1,8 @@
 /// Detail pelanggan/supplier: info kontak dan riwayat transaksinya.
 library;
 
+import '../../sync/sync_providers.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
@@ -161,16 +163,17 @@ class ContactDetailScreen extends ConsumerWidget {
                 existing: data.contact,
               ),
             ),
-            IconButton(
-              tooltip: 'Hapus',
-              icon: const Icon(Icons.delete_outline),
-              onPressed: () => _delete(
-                context,
-                ref,
-                data.contact,
-                data.transactions.fold(0, (sum, t) => sum + t.outstanding),
+            if (!ref.watch(isStaffProvider))
+              IconButton(
+                tooltip: 'Hapus',
+                icon: const Icon(Icons.delete_outline),
+                onPressed: () => _delete(
+                  context,
+                  ref,
+                  data.contact,
+                  data.transactions.fold(0, (sum, t) => sum + t.outstanding),
+                ),
               ),
-            ),
           ],
         ],
       ),

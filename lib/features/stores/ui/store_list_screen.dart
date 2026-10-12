@@ -10,6 +10,8 @@
 ///   toko; tidak memilih otomatis dan menutup diri setelah memilih.
 library;
 
+import '../../sync/ui/join_store_dialog.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -93,6 +95,17 @@ class _StoreListScreenState extends ConsumerState<StoreListScreen> {
       appBar: AppBar(
         title: Text(widget.isPicker ? 'Ganti Toko' : 'Pilih Toko'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.group_add_outlined),
+            tooltip: 'Gabung toko dengan kode',
+            onPressed: _selecting
+                ? null
+                : () async {
+                    final navigator = Navigator.of(context);
+                    final joined = await showJoinStoreDialog(context, ref);
+                    if (joined && widget.isPicker && mounted) navigator.pop();
+                  },
+          ),
           IconButton(
             icon: const Icon(Icons.add_business_outlined),
             tooltip: 'Tambah toko',

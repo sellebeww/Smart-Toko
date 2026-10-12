@@ -155,6 +155,15 @@ class DuplicateProductNameException implements Exception {
 const Object _keepCost = Object();
 
 class ProductDao {
+  /// Id barang baru ditentukan dari toko, jenis, dan namanya. Dua HP yang
+  /// sama-sama mencatat "ayam" saat luring menghasilkan barang yang sama,
+  /// sehingga sinkronisasi menggabungkannya alih-alih membuat dua "ayam".
+  static String idFor(String storeId, ProductKind kind, String nameKey) =>
+      const Uuid().v5(
+        Namespace.url.value,
+        'smarttoko:$storeId:${kind.dbName}:$nameKey',
+      );
+
   final DatabaseExecutor db;
   final Uuid uuid;
 
@@ -200,7 +209,7 @@ class ProductDao {
     }
 
     final record = ProductRecord(
-      id: uuid.v4(),
+      id: idFor(storeId, kind, key),
       storeId: storeId,
       kind: kind,
       name: name.trim(),

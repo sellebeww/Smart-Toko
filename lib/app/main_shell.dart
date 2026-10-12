@@ -1,3 +1,5 @@
+import '../features/sync/sync_providers.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -24,25 +26,27 @@ class _MainShellState extends ConsumerState<MainShell> {
   Widget build(BuildContext context) {
     final capture = ref.watch(captureControllerProvider);
     final busy = capture is CaptureInProgress || capture is CaptureProcessing;
+    // Karyawan tidak melihat laporan (laba, omzet periode, modal).
+    final staff = ref.watch(isStaffProvider);
+    final screens = [
+      const HomeScreen(),
+      const HistoryScreen(),
+      const CatalogScreen(initialKind: ProductKind.bahan),
+      if (!staff) const ReportScreen(),
+      const SettingsScreen(),
+    ];
+    final index = _index.clamp(0, screens.length - 1);
     return PopScope(
       canPop: _index == 0,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop) setState(() => _index = 0);
       },
       child: Scaffold(
-        body: IndexedStack(
-          index: _index,
-          children: const [
-            HomeScreen(),
-            HistoryScreen(),
-            CatalogScreen(initialKind: ProductKind.bahan),
-            ReportScreen(),
-            SettingsScreen(),
-          ],
-        ),
+        body: IndexedStack(index: index, children: screens),
         bottomNavigationBar: SmartTokoNavigationBar(
-          selectedIndex: _index,
+          selectedIndex: index,
           enabled: !busy,
+          showReports: !staff,
           onSelected: (index) => setState(() => _index = index),
         ),
       ),
@@ -53,12 +57,14 @@ class _MainShellState extends ConsumerState<MainShell> {
 class SmartTokoNavigationBar extends StatelessWidget {
   final int selectedIndex;
   final bool enabled;
+  final bool showReports;
   final ValueChanged<int> onSelected;
   const SmartTokoNavigationBar({
     super.key,
     required this.selectedIndex,
     required this.onSelected,
     this.enabled = true,
+    this.showReports = true,
   });
   @override
   Widget build(BuildContext context) => NavigationBar(
@@ -98,12 +104,13 @@ class SmartTokoNavigationBar extends StatelessWidget {
         selectedIcon: const FigmaIcon('a44c3'),
         label: 'Stok',
       ),
-      NavigationDestination(
-        enabled: enabled,
-        icon: const FigmaIcon('a029f'),
-        selectedIcon: const FigmaIcon('75d8a'),
-        label: 'Laporan',
-      ),
+      if (showReports)
+        NavigationDestination(
+          enabled: enabled,
+          icon: const FigmaIcon('a029f'),
+          selectedIcon: const FigmaIcon('75d8a'),
+          label: 'Laporan',
+        ),
       NavigationDestination(
         enabled: enabled,
         icon: const FigmaIcon('e5ad6'),

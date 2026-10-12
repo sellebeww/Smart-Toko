@@ -10,6 +10,7 @@ import '../features/backup/backup_trigger.dart';
 import '../features/auth/ui/login_screen.dart';
 import '../features/onboarding/ui/onboarding_screen.dart';
 import '../features/reminders/ui/reminder_trigger.dart';
+import '../features/sync/ui/sync_trigger.dart';
 import '../features/stores/domain/store_profile.dart';
 import '../features/stores/stores_providers.dart';
 import '../features/stores/ui/add_store_screen.dart';
@@ -117,7 +118,9 @@ class _StoreGate extends ConsumerWidget {
         if (active == null) return const StoreListScreen();
 
         return onboardingDone
-            ? const BackupTrigger(child: ReminderTrigger(child: MainShell()))
+            ? const BackupTrigger(
+                child: ReminderTrigger(child: SyncTrigger(child: MainShell())),
+              )
             : OnboardingScreen(onDone: onOnboardingDone);
       },
     );

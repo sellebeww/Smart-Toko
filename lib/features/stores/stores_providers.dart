@@ -52,7 +52,7 @@ Stream<List<StoreProfile>> cachedStores({
   try {
     await for (final stores in remote) {
       try {
-        await cache.saveAll(stores);
+        await cache.saveAll(stores, viewerUid: ownerUid);
       } catch (_) {
         // Salinan lokal hanya pelengkap; data server tetap ditampilkan.
       }

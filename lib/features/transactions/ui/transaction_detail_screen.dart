@@ -1,6 +1,9 @@
 /// Detail satu transaksi, dengan koreksi dan hapus.
 library;
 
+import '../../auth/auth_providers.dart';
+import '../../sync/sync_providers.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
@@ -118,7 +121,16 @@ class TransactionDetailScreen extends ConsumerWidget {
           final contactName = record.contactId == null
               ? null
               : contactNames[record.contactId];
+          // Karyawan hanya mengoreksi/menghapus catatannya sendiri; server
+          // menolak selain itu.
+          final email = ref.watch(authStateChangesProvider).value?.email;
+          final canEdit = canEditRecord(
+            staff: ref.watch(isStaffProvider),
+            email: email,
+            recordedBy: record.recordedBy,
+          );
           return _DetailBody(
+            canEdit: canEdit,
             record: record,
             contactName: contactName,
             onShareReceipt: record.category == TxCategory.penjualan
@@ -142,10 +154,14 @@ class _DetailBody extends ConsumerWidget {
   /// Null untuk transaksi yang bukan penjualan (tidak ada yang dinotakan).
   final VoidCallback? onShareReceipt;
 
+  /// False untuk karyawan pada catatan orang lain.
+  final bool canEdit;
+
   const _DetailBody({
     required this.record,
     required this.contactName,
     required this.onShareReceipt,
+    this.canEdit = true,
     required this.onCorrect,
     required this.onDelete,
   });
@@ -210,7 +226,7 @@ class _DetailBody extends ConsumerWidget {
         ),
         if (record.onCredit) ...[
           const SizedBox(height: 16),
-          _PaymentsSection(record: record),
+          _PaymentsSection(record: record, canEditDue: canEdit),
         ],
         const SizedBox(height: 16),
         Text('Barang', style: theme.textTheme.titleSmall),
@@ -247,28 +263,35 @@ class _DetailBody extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
         ],
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: onDelete,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: theme.colorScheme.error,
+        if (!canEdit)
+          Text(
+            'Dicatat orang lain. Hanya pemilik toko yang bisa mengoreksi '
+            'atau menghapusnya.',
+            style: theme.textTheme.bodySmall,
+          )
+        else
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onDelete,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: theme.colorScheme.error,
+                  ),
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Hapus'),
                 ),
-                icon: const Icon(Icons.delete_outline),
-                label: const Text('Hapus'),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: FilledButton.icon(
-                onPressed: onCorrect,
-                icon: const Icon(Icons.edit),
-                label: const Text('Koreksi'),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: onCorrect,
+                  icon: const Icon(Icons.edit),
+                  label: const Text('Koreksi'),
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
       ],
     );
   }
@@ -297,7 +320,8 @@ class _InfoRow extends StatelessWidget {
 /// Status kasbon, riwayat pembayaran, dan tombol mencatat pembayaran baru.
 class _PaymentsSection extends ConsumerWidget {
   final TxRecord record;
-  const _PaymentsSection({required this.record});
+  final bool canEditDue;
+  const _PaymentsSection({required this.record, this.canEditDue = true});
 
   Future<void> _editDue(BuildContext context, WidgetRef ref) async {
     final now = DateTime.now();
@@ -423,11 +447,12 @@ class _PaymentsSection extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  TextButton(
-                    onPressed: () => _editDue(context, ref),
-                    child: Text(record.dueAt == null ? 'Atur' : 'Ubah'),
-                  ),
-                  if (record.dueAt != null)
+                  if (canEditDue)
+                    TextButton(
+                      onPressed: () => _editDue(context, ref),
+                      child: Text(record.dueAt == null ? 'Atur' : 'Ubah'),
+                    ),
+                  if (canEditDue && record.dueAt != null)
                     IconButton(
                       tooltip: 'Hapus jatuh tempo',
                       icon: const Icon(Icons.close, size: 18),

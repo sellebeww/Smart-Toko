@@ -34,6 +34,9 @@ class StoreProfile {
   final StoreVerificationStatus verificationStatus;
   final String? rejectionReason;
 
+  /// Sinkronisasi antar-HP dinyalakan pemilik (syarat menambah karyawan).
+  final bool syncEnabled;
+
   const StoreProfile({
     required this.id,
     required this.ownerUid,
@@ -43,7 +46,11 @@ class StoreProfile {
     required this.createdAt,
     this.verificationStatus = StoreVerificationStatus.unverified,
     this.rejectionReason,
+    this.syncEnabled = false,
   });
+
+  /// Pengguna [uid] pemilik toko ini; selain itu ia karyawan.
+  bool isOwnedBy(String? uid) => uid != null && ownerUid == uid;
 
   /// [row] adalah baris mentah dari Postgrest — kolomnya snake_case
   /// (owner_uid, created_at, dst.), beda dari nama field Dart di kelas ini.
@@ -62,6 +69,7 @@ class StoreProfile {
         row['verification_status'] as String?,
       ),
       rejectionReason: row['rejection_reason'] as String?,
+      syncEnabled: row['sync_enabled'] == true,
     );
   }
 }

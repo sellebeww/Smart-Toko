@@ -2,6 +2,8 @@
 /// dengan subtotal, dan bisa diekspor ke Excel.
 library;
 
+import '../../sync/sync_providers.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -43,25 +45,27 @@ class HistoryScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Transaksi'),
         actions: [
-          PopupMenuButton<bool>(
-            tooltip: 'Export Excel',
-            icon: const Icon(Icons.file_download_outlined),
-            onSelected: (all) => _export(context, ref, all),
-            itemBuilder: (_) => [
-              PopupMenuItem(
-                value: false,
-                child: Text(
-                  filter.isNarrowed
-                      ? 'Export sesuai filter'
-                      : 'Export ${filter.range.label.toLowerCase()}',
+          // Ekspor membuka seluruh angka toko; hanya untuk pemilik.
+          if (!ref.watch(isStaffProvider))
+            PopupMenuButton<bool>(
+              tooltip: 'Export Excel',
+              icon: const Icon(Icons.file_download_outlined),
+              onSelected: (all) => _export(context, ref, all),
+              itemBuilder: (_) => [
+                PopupMenuItem(
+                  value: false,
+                  child: Text(
+                    filter.isNarrowed
+                        ? 'Export sesuai filter'
+                        : 'Export ${filter.range.label.toLowerCase()}',
+                  ),
                 ),
-              ),
-              const PopupMenuItem(
-                value: true,
-                child: Text('Export semua data toko ini'),
-              ),
-            ],
-          ),
+                const PopupMenuItem(
+                  value: true,
+                  child: Text('Export semua data toko ini'),
+                ),
+              ],
+            ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
