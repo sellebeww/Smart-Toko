@@ -3,8 +3,8 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <!-- Sinkronisasi, bantuan AI, dan upload berkas verifikasi toko (opsional). -->
     <uses-permission android:name="android.permission.INTERNET"/>
-    <!-- Hanya diminta saat pengguna memulai verifikasi toko (opsional) untuk
-         memotret KTP/foto toko/selfie. -->
+    <!-- Hanya diminta saat pengguna memotret barang, atau memulai verifikasi
+         toko (opsional) untuk memotret KTP/foto toko/selfie. -->
     <uses-permission android:name="android.permission.CAMERA"/>
     <!-- Pengingat terjadwal dipasang ulang setelah HP dinyalakan ulang.
          Izin notifikasi (Android 13+) disediakan plugin dan diminta saat

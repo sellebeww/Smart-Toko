@@ -40,6 +40,9 @@ class ProductRecord {
 
   /// Modal per satuan (HPP) untuk menu. Null = belum diisi.
   final int? costPrice;
+
+  /// Berkas foto di HP ini, bila ada.
+  final String? photoPath;
   final bool archived;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -56,6 +59,7 @@ class ProductRecord {
     this.defaultPrice,
     this.lowStockThreshold,
     this.costPrice,
+    this.photoPath,
   });
 
   /// Untung per satuan bila harga jual dan modal sama-sama diketahui.
@@ -83,6 +87,7 @@ class ProductRecord {
     defaultPrice: (row['default_price'] as num?)?.toInt(),
     lowStockThreshold: (row['low_stock_threshold'] as num?)?.toInt(),
     costPrice: (row['cost_price'] as num?)?.toInt(),
+    photoPath: row['photo_path'] as String?,
     archived: (row['archived']! as num) != 0,
     createdAt: DateTime.fromMillisecondsSinceEpoch(
       (row['created_at']! as num).toInt(),
@@ -314,6 +319,17 @@ class ProductDao {
     "(SELECT id FROM transactions WHERE category = 'penjualan')",
     [cost, productId],
   );
+
+  /// Foto hanya untuk HP ini, jadi tidak mengubah updated_at: tidak ada yang
+  /// perlu dicadangkan atau disinkronkan.
+  Future<void> setPhoto(String id, String? path) async {
+    await db.update(
+      'products',
+      {'photo_path': path},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
 
   Future<void> setArchived(String id, {required bool archived}) async {
     await db.update(

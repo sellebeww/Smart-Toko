@@ -1,6 +1,8 @@
 /// Provider katalog menu/bahan beserta stok.
 library;
 
+import 'product_photo_store.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
@@ -43,3 +45,7 @@ final lowStockProvider = FutureProvider.autoDispose<List<ProductWithStock>>((
   return all.where((p) => p.isLow).toList()
     ..sort((a, b) => a.stock.compareTo(b.stock));
 });
+
+final productPhotoStoreProvider = Provider<ProductPhotoStore>(
+  (ref) => ProductPhotoStore(),
+);

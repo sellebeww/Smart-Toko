@@ -158,7 +158,11 @@ class BackupService {
               [storeId],
             )
           : await db.query(table, where: 'store_id = ?', whereArgs: [storeId]);
-      tables[table] = rows;
+      // Path foto hanya berlaku di HP ini; berkasnya tidak ikut dicadangkan.
+      tables[table] = [
+        for (final row in rows)
+          Map<String, Object?>.of(row)..remove('photo_path'),
+      ];
     }
     return payloadBuilder.build({
       'format': backupFormat,

@@ -7,7 +7,7 @@ library;
 
 import 'package:sqflite/sqflite.dart';
 
-const int schemaVersion = 8;
+const int schemaVersion = 9;
 
 class Migration {
   final int version;
@@ -432,4 +432,7 @@ const List<Migration> migrations = [
     END
     ''',
   ]),
+  // Foto barang: berkas di penyimpanan aplikasi HP ini saja. Tidak ikut
+  // sinkronisasi maupun cadangan (lihat localOnlyColumns).
+  Migration(9, ['ALTER TABLE products ADD COLUMN photo_path TEXT']),
 ];

@@ -1,6 +1,13 @@
 /// Form tambah/ubah menu atau bahan.
 library;
 
+import 'product_thumb.dart';
+import '../catalog_providers.dart';
+
+import 'package:image_picker/image_picker.dart';
+
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -50,6 +57,10 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
   );
   bool _saving = false;
   String? _error;
+
+  /// Foto baru yang belum disimpan, atau permintaan menghapus foto lama.
+  File? _newPhoto;
+  bool _removePhoto = false;
 
   bool get _isBahan => widget.kind == ProductKind.bahan;
 
@@ -108,6 +119,7 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
         now: now,
         costPrice: _isBahan ? product.costPrice : parseRupiahInput(_cost.text),
       );
+      await _savePhoto(product);
       ref.read(dataRevisionProvider.notifier).bump();
       navigator.pop();
     } on DuplicateProductNameException catch (e) {
@@ -122,6 +134,63 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
           _saving = false;
           _error = 'Belum tersimpan. Coba lagi.';
         });
+      }
+    }
+  }
+
+  Future<void> _savePhoto(ProductRecord product) async {
+    final photos = ref.read(productPhotoStoreProvider);
+    final dao = ref.read(productDaoProvider);
+    final old = widget.existing?.photoPath;
+    if (_newPhoto != null) {
+      final path = await photos.adopt(_newPhoto!, product.id);
+      await dao.setPhoto(product.id, path);
+      await photos.delete(old);
+    } else if (_removePhoto) {
+      await dao.setPhoto(product.id, null);
+      await photos.delete(old);
+    }
+  }
+
+  Future<void> _pickPhoto() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Ambil foto'),
+              onTap: () => Navigator.of(context).pop(ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Pilih dari galeri'),
+              onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+    try {
+      // Diperkecil: cukup untuk daftar menu, hemat ruang HP.
+      final picked = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: 800,
+        imageQuality: 75,
+      );
+      if (picked == null || !mounted) return;
+      setState(() {
+        _newPhoto = File(picked.path);
+        _removePhoto = false;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error = 'Foto belum bisa diambil. Periksa izin kamera.',
+        );
       }
     }
   }
@@ -185,6 +254,18 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 16),
+            _PhotoRow(
+              newPhoto: _newPhoto,
+              existingPath: _removePhoto ? null : widget.existing?.photoPath,
+              onPick: _saving ? null : _pickPhoto,
+              onRemove: _saving
+                  ? null
+                  : () => setState(() {
+                      _newPhoto = null;
+                      _removePhoto = true;
+                    }),
+            ),
+            const SizedBox(height: 12),
             TextFormField(
               controller: _name,
               autofocus: !isEdit,
@@ -281,6 +362,69 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _PhotoRow extends StatelessWidget {
+  final File? newPhoto;
+  final String? existingPath;
+  final VoidCallback? onPick;
+  final VoidCallback? onRemove;
+
+  const _PhotoRow({
+    required this.newPhoto,
+    required this.existingPath,
+    required this.onPick,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final placeholder = Container(
+      width: 64,
+      height: 64,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: const Icon(Icons.add_a_photo_outlined),
+    );
+    final preview = newPhoto != null
+        ? ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.file(
+              newPhoto!,
+              width: 64,
+              height: 64,
+              fit: BoxFit.cover,
+            ),
+          )
+        : ProductThumb(path: existingPath, size: 64, fallback: placeholder);
+    final hasPhoto =
+        newPhoto != null ||
+        (existingPath != null && File(existingPath!).existsSync());
+    return Row(
+      children: [
+        InkWell(onTap: onPick, child: preview),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextButton(
+                onPressed: onPick,
+                child: Text(hasPhoto ? 'Ganti foto' : 'Tambah foto (opsional)'),
+              ),
+              if (hasPhoto)
+                TextButton(
+                  onPressed: onRemove,
+                  child: const Text('Hapus foto'),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

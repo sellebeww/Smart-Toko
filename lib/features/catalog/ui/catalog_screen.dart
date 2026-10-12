@@ -5,6 +5,7 @@
 /// merapikan (ganti nama, harga, batas stok) dan mencatat pemakaian.
 library;
 
+import 'product_thumb.dart';
 import '../../sync/sync_providers.dart';
 
 import 'package:flutter/material.dart';
@@ -203,10 +204,14 @@ class _ProductList extends ConsumerWidget {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (kind == ProductKind.menu) ...[
-                            const FigmaIcon('9602a'),
+                          ProductThumb(
+                            path: p.photoPath,
+                            fallback: kind == ProductKind.menu
+                                ? const FigmaIcon('9602a')
+                                : const SizedBox.shrink(),
+                          ),
+                          if (kind == ProductKind.menu || p.photoPath != null)
                             const SizedBox(width: 12),
-                          ],
                           Expanded(
                             child: Text(
                               p.name,

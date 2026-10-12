@@ -26,6 +26,10 @@ const List<String> syncTables = [
   'debt_payments',
 ];
 
+/// Kolom yang hanya bermakna di HP ini (mis. path berkas foto). Tidak
+/// dikirim, dan nilai dari server tidak menimpanya.
+const Set<String> localOnlyColumns = {'photo_path'};
+
 const int _pushBatch = 200;
 const int _pullPage = 500;
 
@@ -283,7 +287,7 @@ class SyncEngine {
         identityConsent: false,
         keepRecorder: true,
       ),
-    );
+    )..removeWhere((key, _) => localOnlyColumns.contains(key));
   }
 
   // ------------------------------------------------------------------ tarik
@@ -375,7 +379,9 @@ class SyncEngine {
     final columns = await _columnsOf(txn, row.table);
     final values = <String, Object?>{
       for (final entry in row.data!.entries)
-        if (columns.contains(entry.key)) entry.key: entry.value,
+        if (columns.contains(entry.key) &&
+            !localOnlyColumns.contains(entry.key))
+          entry.key: entry.value,
     };
     values['id'] = row.id;
     // Baris selalu milik toko yang sedang disinkronkan.

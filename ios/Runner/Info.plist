@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Kamera digunakan untuk mengambil foto verifikasi toko setelah kamu menyetujuinya.</string>
+	<string>Kamera digunakan untuk memotret barang dagangan, dan foto verifikasi toko setelah kamu menyetujuinya.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Pilih foto dari galeri untuk pengajuan verifikasi toko.</string>
+	<string>Pilih foto dari galeri untuk barang dagangan atau pengajuan verifikasi toko.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Face ID dipakai untuk membuka kunci SmartToko bila kamu menyalakannya di Pengaturan.</string>
 	<key>NSMicrophoneUsageDescription</key>
