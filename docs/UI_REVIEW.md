@@ -1,9 +1,12 @@
 # Review SmartToko — 6 Oktober 2026
 
 Acuan desain: [Figma SmartToko](https://www.figma.com/design/EXgxTa7OZXrkHtvINldOyM/Untitled--Copy-?node-id=3-9376).
-Logo berasal dari PNG yang diberikan pemilik; gambar aslinya disimpan di
-`assets/brand/smarttoko-logo.png`, dan ukuran ikon Android/iOS dibuat dari
-berkas yang sama. Font Inter dibundel untuk penggunaan luring, beserta lisensi
+Logo diperbarui pada 16 Oktober 2026 dengan simbol toko, struk/Rp, dan mikrofon
+untuk menjelaskan pencatatan keuangan lewat suara. PNG transparan disimpan di
+`assets/brand/smarttoko-logo.png`; ikon Android/iOS, notifikasi, dan splash
+diekspor dari berkas yang sama melalui `tool/export_brand.swift`.
+Prompt dan cara ekspor ada di `assets/brand/README.md`.
+Font Inter dibundel untuk penggunaan luring, beserta lisensi
 OFL. Ikon SVG pada navigasi dan kartu berasal dari aset Figma.
 
 ## Hasil audit dan perbaikan
@@ -46,6 +49,13 @@ Desain diadaptasi ke Flutter dan fitur nyata; bukan salinan statis setiap layar
 mockup.
 
 ## Validasi dan cara melihat hasil
+
+Pemeriksaan pembaruan logo pada 16 Oktober 2026: `flutter analyze` tanpa masalah,
+seluruh 401 tes Flutter lulus, dan APK debug berhasil dibangun. Dimensi serta
+kanal alfa seluruh entri ikon/splash Android dan iOS sudah diperiksa; screenshot
+dokumentasi diperbarui dari pengujian UI. Build iOS belum diuji karena Xcode
+lengkap tidak tersedia. Tes SQL lokal belum dijalankan ulang karena Docker
+daemon tidak aktif. Pemeriksaan ini tidak mencakup uji perangkat fisik.
 
 ```sh
 flutter analyze

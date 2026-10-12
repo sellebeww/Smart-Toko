@@ -20,7 +20,8 @@ tidak dikirim ke mana pun kecuali lewat fitur opsional di bawah.
 
 ## Data akun (wajib)
 
-Untuk membuat akun kami menyimpan **alamat email** dan kata sandi (disimpan
+Untuk membuat akun kami menyimpan **alamat email** (atau **nomor HP** bila
+kamu masuk dengan kode SMS) dan kata sandi (disimpan
 dalam bentuk hash oleh penyedia autentikasi kami, Supabase) serta **profil
 toko** (nama, kategori, alamat) di server.
 
@@ -31,9 +32,16 @@ toko** (nama, kategori, alamat) di server.
 | Cadangan cloud | Salinan transaksi, barang, stok, kontak, dan catatan utang/piutang toko | Memulihkan data bila HP hilang atau diganti | Server SmartToko (Supabase). Hanya akunmu yang bisa membukanya |
 | Verifikasi toko | Foto KTP, foto toko, selfie memegang KTP, dan NIB bila ada | Memastikan toko nyata | Server SmartToko. Hanya kamu dan admin peninjau yang bisa membukanya. Tidak dipakai untuk tujuan lain |
 | Bantuan AI | Kalimat yang kamu ucapkan, hanya saat pengurai di HP gagal | Mengurai ucapan sulit menjadi draf transaksi | Server SmartToko lalu Anthropic (penyedia model AI). Hasilnya tetap kamu periksa sebelum disimpan |
+| Sinkronisasi antar-HP dan karyawan | Seluruh catatan toko (transaksi, barang, stok, kontak, kasbon), termasuk email/nomor HP pencatat tiap transaksi | Memakai toko di beberapa HP dan bersama karyawan | Server SmartToko. Dapat dibuka pemilik toko dan karyawan yang ia undang; karyawan tidak menerima data modal (HPP). Mematikannya menghapus data ini dari server |
 | Laporan error | Jenis error, pesan dan jejak yang dipotong (email dan angka panjang dibuang), versi aplikasi, jenis HP | Memperbaiki bug | Server SmartToko. Tanpa data transaksi, nama, atau kontak |
 
 Kamu bisa mematikan tiap fitur di **Pengaturan** kapan saja.
+
+## Data yang tetap di HP
+
+Foto barang, PIN, pengaturan sidik jari/wajah, dan jadwal pengingat hanya
+tersimpan di HP-mu dan tidak dikirim ke server. Sidik jari/wajah diperiksa
+oleh sistem HP; SmartToko tidak pernah menerima datanya.
 
 ## Kunci PIN
 

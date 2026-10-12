@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Warna identitas SmartToko, diambil dari logo yang disediakan pemilik.
+/// Palet identitas SmartToko, selaras dengan logo toko, struk, dan suara.
 abstract final class SmartTokoTheme {
   static const forest = Color(0xFF176448);
   static const green = Color(0xFF25834D);

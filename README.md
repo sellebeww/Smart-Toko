@@ -4,6 +4,19 @@ Aplikasi Android/iOS untuk mencatat pemasukan dan pengeluaran warung lewat
 suara atau ketikan. Setiap catatan diperiksa pengguna sebelum disimpan, dan
 semua catatan tersimpan di HP (tetap jalan tanpa internet).
 
+**Untuk siapa:** pemilik warung, warteg, toko kelontong, dan pedagang pasar
+yang ingin membukukan usahanya tanpa repot mengetik.
+
+**Intinya:** ucapkan *"jual nasi goreng dua lima belas ribu"* dan aplikasi
+menyusun catatannya. Kamu periksa, lalu simpan. Dari situ stok, kasbon, laba
+per menu, dan laporan ikut terhitung sendiri.
+
+| Masuk | Beranda | Laporan | Stok |
+|:---:|:---:|:---:|:---:|
+| <img src="docs/screenshots/masuk.png" width="180"> | <img src="docs/screenshots/beranda.png" width="180"> | <img src="docs/screenshots/laporan.png" width="180"> | <img src="docs/screenshots/stok.png" width="180"> |
+
+<sub>Angka pada tangkapan layar hanyalah data contoh untuk pengujian.</sub>
+
 Backend: **Supabase** (Auth, Postgres, Storage, Edge Functions).
 Alasan di balik rancangannya ada di [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md).
 Review UI Figma, perbaikan terbaru, dan batas pengujiannya ada di
@@ -18,13 +31,26 @@ Review UI Figma, perbaikan terbaru, dan batas pengujiannya ada di
 - Katalog menu/bahan dan stok yang tumbuh otomatis dari transaksi; kontak
   pelanggan/supplier.
 - **Utang & piutang (kasbon):** catat penjualan/pembelian belum dibayar
-  (atau ucapkan "Bu Sari ngutang nasi goreng dua lima belas ribu"), cicil
-  dan lunasi dari detail transaksi, lihat siapa saja yang belum bayar, dan
-  kirim pengingat lewat WhatsApp.
+  (atau ucapkan "Bu Sari ngutang nasi goreng dua lima belas ribu, bayar
+  minggu depan"), dengan jatuh tempo opsional. Cicil dan lunasi dari detail
+  transaksi, lihat siapa yang belum bayar atau sudah telat, rekam jejak bayar
+  tiap pelanggan, dan kirim pengingat lewat WhatsApp.
+- **Modal (HPP) dan laba per menu:** isi modal per porsi; laporan
+  menghitung laba kotor dan margin tiap menu. Modal disalin ke tiap
+  penjualan, jadi mengubah modal tidak mengubah laba masa lalu.
+- **Sinkronisasi antar-HP dan karyawan (opsional):** satu toko dipakai di
+  beberapa HP; pemilik mengundang karyawan dengan kode. Karyawan bisa
+  mencatat, tetapi tidak melihat laporan, laba, dan modal, dan hanya bisa
+  mengoreksi catatannya sendiri. Aturan ini ditegakkan server.
+- **Pengingat terjadwal (opsional):** pengingat mencatat tiap malam
+  (dilewati bila sudah mencatat) dan pengingat pagi untuk kasbon jatuh tempo.
 - Riwayat dengan pencarian (barang, catatan, nama) dan filter "Belum
-  lunas", laporan, dan export Excel (termasuk status bayar dan sisa).
+  lunas", laporan, dan export Excel (termasuk status bayar, sisa, dan jatuh
+  tempo).
 - Bagikan nota penjualan sebagai teks.
-- Kunci aplikasi dengan PIN (mengunci tampilan; bukan enkripsi data).
+- Foto barang (disimpan di HP ini saja).
+- Kunci aplikasi dengan PIN, bisa dibuka dengan sidik jari/wajah (mengunci
+  tampilan; bukan enkripsi data).
 - Bantuan AI (opsional) untuk ucapan yang sulit diurai, lewat server.
 - Cadangan cloud (opsional) per toko, dengan pemulihan di HP baru.
 - Verifikasi toko (opsional): KTP, foto toko, selfie, NIB, lalu ditinjau
@@ -127,7 +153,20 @@ batas laporan error, dan hapus akun. Skema Supabase ditiru oleh
 project Supabase-mu. Uji manual nomor 6 di bawah tetap perlu dijalankan
 sekali pada project sungguhan.
 
-### 6. Laporan error
+### 6. Sinkronisasi dan karyawan
+
+Tidak butuh langkah tambahan selain menjalankan `setup.sql` versi terbaru
+(bagian 10). Pemilik menyalakannya di Pengaturan > Sinkronisasi & karyawan.
+Mematikannya menghapus data toko itu dari server dan mengeluarkan semua
+karyawan; catatan di HP pemilik tetap ada.
+
+### 7. Masuk dengan nomor HP (opsional)
+
+Pasang penyedia SMS (Twilio, Vonage, atau MessageBird) di Authentication >
+Providers > Phone, lalu build dengan `--dart-define=PHONE_LOGIN=true`.
+Tanpa flag itu pilihan "Masuk dengan nomor HP" tidak ditampilkan.
+
+### 8. Laporan error
 
 Pengguna yang menyalakan "Kirim laporan error" di Pengaturan mengirim
 laporan ke tabel `public.client_errors`. Tabel itu tertutup untuk klien;
@@ -203,14 +242,35 @@ Butuh project Supabase yang sudah disiapkan seperti di atas.
    pengurai lokal. Draf tetap harus diperiksa sebelum disimpan.
 8. **Hapus akun:** akun, toko, foto, dan cadangan hilang dari Supabase, lalu
    aplikasi kembali ke layar masuk.
+9. **Sinkronisasi (dua HP pemilik):** nyalakan di HP A, masuk akun yang sama
+   di HP B dan pilih toko itu. Data A muncul di B; transaksi baru, koreksi,
+   dan hapus di satu HP muncul di HP lain dalam ±30 detik. Coba juga saat
+   salah satu HP luring, lalu sambungkan lagi.
+10. **Karyawan:** undang dari HP pemilik, gabung dengan kode di HP lain
+    (akun berbeda). Karyawan tidak melihat menu Laporan, tidak bisa
+    mengoreksi transaksi pemilik, dan daftar menunya tanpa modal. Keluarkan
+    karyawan: tokonya hilang dari HP karyawan saat tersambung.
+11. **Pengingat:** nyalakan, atur jam 2 menit dari sekarang, tutup aplikasi.
+    Notifikasi harus muncul; setelah mencatat transaksi hari itu, pengingat
+    hari itu tidak muncul. Mulai ulang HP: jadwal tetap ada.
+12. **Sidik jari/wajah:** pasang PIN, nyalakan biometrik, tinggalkan
+    aplikasi >1 menit. Dialog biometrik muncul; batal → PIN tetap bisa.
+13. **Rilis:** ulangi nomor 11 dan 12 dengan build `--release`.
 
 ## Batasan yang diketahui
 
-- Kunci PIN melindungi dari orang yang meminjam HP yang sedang menyala. Data
-  di HP tidak dienkripsi, jadi PIN tidak melindungi dari orang yang mengambil
-  berkas datanya. Buka kunci dengan sidik jari/wajah belum ada.
-- Pengingat tagihan hanya menyiapkan pesan; pengguna yang menekan kirim di
-  WhatsApp. Belum ada pengingat terjadwal.
-- Login dengan nomor HP belum ada (butuh penyedia SMS berbayar).
-- Pencatatan otomatis dari notifikasi QRIS belum ada.
+- Kunci PIN/biometrik melindungi dari orang yang meminjam HP yang sedang
+  menyala. Basis data di HP tidak dienkripsi (lihat
+  [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md)).
+- Pengingat tagihan ke pelanggan hanya menyiapkan pesan; pengguna yang
+  menekan kirim di WhatsApp.
+- Sinkronisasi memakai "yang terakhir sampai di server yang berlaku". Bila
+  dua orang mengubah transaksi yang sama saat luring, salah satu
+  perubahannya tertimpa. Dua HP yang membuat barang bernama sama tetap
+  menyatu.
+- Foto barang tidak ikut sinkronisasi maupun cadangan.
+- Pengingat terjadwal di Android memakai jadwal tidak presisi (bisa mundur
+  beberapa menit) supaya tidak butuh izin alarm presisi.
+- Pencatatan otomatis dari notifikasi QRIS belum ada (lihat
+  DESIGN_DECISIONS.md).
 - iOS belum diuji di perangkat nyata.

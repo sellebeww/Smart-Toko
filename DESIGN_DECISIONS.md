@@ -442,7 +442,66 @@ salah satu gagal, yang rusak bukan fiturnya melainkan komitmen produknya.
 ## 12. Langkah Berikutnya
 
 1. Uji parser dengan rekaman nyata di warung, lalu tala ulang ambang keyakinan.
-2. Implementasi `NotificationListenerService` untuk QRIS sesuai rancangan di §10.
-3. Login nomor HP setelah penyedia SMS dipilih.
-4. Enkripsi isi cadangan di sisi klien bila dibutuhkan jaminan bahwa operator
+2. QRIS dari notifikasi sesuai rancangan di §10, setelah ada contoh
+   notifikasi nyata dari tiap aplikasi pembayaran yang dipakai pengguna
+   (lihat §15).
+3. Enkripsi isi cadangan di sisi klien bila dibutuhkan jaminan bahwa operator
    server pun tidak bisa membacanya.
+4. Sinkronisasi foto barang lewat Storage, bila pengguna memintanya.
+
+---
+
+## 13. Sinkronisasi antar-HP dan Karyawan
+
+**Keputusan:** satu tabel server generik `sync_rows` (baris JSON per tabel)
+dengan nomor versi berurutan, bukan cermin tiap tabel di Postgres.
+
+- **Perubahan lokal dicatat trigger SQLite**, bukan oleh kode aplikasi. Hapus
+  berantai (ON DELETE CASCADE) ikut tercatat tanpa ada yang lupa menambahkan
+  kode pencatatan di repository baru.
+- **Kirim dulu, baru tarik**; yang terakhir sampai di server yang berlaku.
+  Untuk catatan warung, bentrok sungguhan (dua orang mengoreksi transaksi yang
+  sama saat luring) jarang, dan aturan ini mudah dijelaskan.
+- **Versi per toko diserialkan** dengan advisory lock di `sync_push`. Tanpa
+  itu, HP yang sedang menarik bisa melewati versi milik transaksi Postgres
+  yang belum commit, dan perubahan itu hilang selamanya dari HP tersebut.
+- **HP kedua menarik dulu**, lalu hanya mengirim baris yang belum ada di
+  server. Bila tidak, salinan lama (mis. dari cadangan minggu lalu) menimpa
+  data terbaru.
+- **Id barang deterministik** (UUID v5 dari toko, jenis, dan nama), sehingga
+  "ayam" yang dibuat di dua HP saat luring menjadi satu barang.
+- **Aturan karyawan ditegakkan server**, bukan sekadar disembunyikan di UI:
+  hanya mengubah baris buatannya sendiri, tidak pernah menerima atau menulis
+  modal (HPP). Perubahan yang ditolak tidak menggagalkan kiriman; versi baris
+  aslinya dinaikkan supaya HP karyawan kembali sama dengan server.
+- **Pembatasan tebakan kode undangan** mengembalikan `null`, bukan exception:
+  exception di PL/pgSQL membatalkan penambahan hitungan percobaan, sehingga
+  pembatasnya tidak pernah bekerja (ditemukan oleh uji SQL).
+
+## 14. Mengapa Basis Data Lokal Tidak Dienkripsi
+
+SQLCipher dipertimbangkan dan **sengaja tidak dipasang**:
+
+- Ancaman yang tersisa kecil. HP terkunci sudah dilindungi enkripsi berkas
+  bawaan Android/iOS, dan HP yang terbuka dilindungi kunci PIN/biometrik
+  aplikasi. Penyerang yang sudah punya akses root bisa membaca kuncinya dari
+  Keystore juga.
+- Risikonya besar untuk aplikasi yang data utamanya ada di HP. Kunci di
+  Android Keystore tidak ikut pindah saat Auto Backup memulihkan aplikasi ke
+  HP baru. Basis data yang dipulihkan menjadi tidak terbaca, sehingga
+  pengguna yang tidak menyalakan cadangan SmartToko kehilangan seluruh
+  catatannya. Saat ini pemulihan itu justru berhasil.
+- Menambah ±7 MB per arsitektur ke ukuran APK.
+
+Bila kelak dibutuhkan, cara yang lebih aman adalah mengenkripsi isi
+**cadangan cloud** di sisi klien (lihat §12), bukan basis data lokal.
+
+## 15. Mengapa QRIS Belum Dikerjakan
+
+Membaca notifikasi pembayaran membutuhkan izin akses notifikasi, yang
+memberi aplikasi akses ke **semua** notifikasi di HP, termasuk pesan
+pribadi. Format notifikasi tiap bank dan dompet digital juga berbeda dan
+berubah tanpa pemberitahuan. Pengurai yang ditebak tanpa contoh nyata akan
+salah mencatat uang. Fitur ini menunggu kumpulan contoh notifikasi nyata
+dari aplikasi pembayaran yang benar-benar dipakai pengguna, dan peninjauan
+kebijakan Play Store untuk izin tersebut.

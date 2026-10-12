@@ -7,15 +7,12 @@ class SmartTokoLogo extends StatelessWidget {
   const SmartTokoLogo({super.key, this.size = 56});
 
   @override
-  Widget build(BuildContext context) => ClipRRect(
-    borderRadius: BorderRadius.circular(size * .22),
-    child: Image.asset(
-      'assets/brand/smarttoko-logo.png',
-      width: size,
-      height: size,
-      fit: BoxFit.contain,
-      semanticLabel: 'Logo SmartToko',
-    ),
+  Widget build(BuildContext context) => Image.asset(
+    'assets/brand/smarttoko-logo.png',
+    width: size,
+    height: size,
+    fit: BoxFit.contain,
+    semanticLabel: 'Logo SmartToko',
   );
 }
 

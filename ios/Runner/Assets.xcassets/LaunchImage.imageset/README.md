@@ -1,5 +1,5 @@
 # Launch Screen Assets
 
-You can customize the launch screen with your own desired assets by replacing the image files in this directory.
-
-You can also do it by opening your Flutter project's Xcode project with `open ios/Runner.xcworkspace`, selecting `Runner/Assets.xcassets` in the Project Navigator and dropping in the desired images.
+Generated from `assets/brand/smarttoko-logo.png` at 160 pt (1x, 2x, and 3x).
+Run `swift -module-cache-path /tmp/smarttoko-swift-cache tool/export_brand.swift`
+from the repository root on macOS to refresh these assets and the app icons.
