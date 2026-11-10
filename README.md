@@ -1,8 +1,14 @@
-# SmartToko
+<div align="center">
 
-Aplikasi Android/iOS untuk mencatat pemasukan dan pengeluaran warung lewat
-suara atau ketikan. Setiap catatan diperiksa pengguna sebelum disimpan, dan
-semua catatan tersimpan di HP (tetap jalan tanpa internet).
+<img src="assets/brand/smarttoko-logo.png" alt="SmartToko" width="200">
+
+### Catat keuangan warung lewat suara.
+
+<p>Aplikasi Android/iOS untuk mencatat pemasukan dan pengeluaran warung lewat suara atau ketikan, tetap jalan tanpa internet.</p>
+
+<p><img src="https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter&logoColor=white&labelColor=3a3f47" alt="Flutter 3.x"> <img src="https://img.shields.io/badge/Dart-3.13-0175C2?logo=dart&logoColor=white&labelColor=3a3f47" alt="Dart 3.13"> <img src="https://img.shields.io/badge/Supabase-backend-3FCF8E?logo=supabase&logoColor=white&labelColor=3a3f47" alt="Supabase backend"> <img src="https://img.shields.io/badge/platform-Android%20%C2%B7%20iOS-3DDC84?labelColor=3a3f47" alt="platform Android · iOS"></p>
+
+</div>
 
 **Untuk siapa:** pemilik warung, warteg, toko kelontong, dan pedagang pasar
 yang ingin membukukan usahanya tanpa repot mengetik.
